@@ -19,6 +19,11 @@ import { DAY_NAMES, DAYS } from '../constants';
 import { WeekData, ScheduleBlock, DungeonLog, BlockType, EnergyLevel } from '../types';
 import { EditBlockDialog } from './EditBlockDialog';
 import { GoogleGenAI, Type } from "@google/genai";
+import { addDungeonLog, getWeekKey, listenDungeonLogs, listenWeek, saveWeek, toggleBlockDone as toggleBlockDoneFs, updateBlock as updateBlockFs } from '../services/firestore';
+
+interface DungeonMapProps {
+    uid: string;
+}
 
 const getEnergyValue = (blockType: BlockType): number => {
     switch (blockType) {
@@ -50,7 +55,7 @@ const getCurrentDayKey = (): string => {
 };
 
 
-export const DungeonMap: React.FC = () => {
+export const DungeonMap: React.FC<DungeonMapProps> = ({ uid }) => {
     const [weekData, setWeekData] = useLocalStorage<WeekData>('dungeonMapData', defaultWeekData);
     const [dungeonLogs, setDungeonLogs] = useLocalStorage<DungeonLog[]>('dungeonLogs', []);
     
@@ -75,8 +80,8 @@ export const DungeonMap: React.FC = () => {
         return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
     };
 
-    const filterBlocks = (blocks: ScheduleBlock[]) => {
-        if (!searchQuery) return blocks;
+    const filterBlocks = (blocks: ScheduleBlock[] = []) => {
+        if (!searchQuery) return blocks || [];
         return blocks.filter(
             (block) =>
                 block.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -89,10 +94,14 @@ export const DungeonMap: React.FC = () => {
             id: `${dayKey}-${Date.now()}`, name: 'New Quest', startTime: '09:00', endTime: '10:00',
             emoji: '⭐', note: '', done: false, blockType: 'Focus', energyLevel: 'High',
         };
-        setWeekData((prev) => ({
-            ...prev,
-            [dayKey]: { ...prev[dayKey], blocks: [...prev[dayKey].blocks, newBlock] },
-        }));
+        const day = weekData[dayKey] || { title: '', theme: '', blocks: [] };
+        const newWeek = {
+            ...weekData,
+            [dayKey]: { ...day, blocks: [...(day.blocks || []), newBlock] },
+        } as WeekData;
+        setWeekData(newWeek);
+        const wkey = getWeekKey(weekStartDate);
+        saveWeek(uid, wkey, newWeek).catch((e) => console.error('Failed to save week:', e));
     };
     
     const handleToggleBlockDone = (day: string, blockId: string) => {
@@ -110,6 +119,7 @@ export const DungeonMap: React.FC = () => {
                                 energyLevel: getEnergyValue(block.blockType), blockType: block.blockType,
                             };
                             setDungeonLogs((prevLogs) => [log, ...prevLogs]);
+                            addDungeonLog(uid, log).catch((e) => console.error('Failed to add log:', e));
                         }
                         return updatedBlock;
                     }
@@ -117,6 +127,10 @@ export const DungeonMap: React.FC = () => {
                 }),
             },
         }));
+        const wkey = getWeekKey(weekStartDate);
+        const current = (weekData[day]?.blocks || []).find((b) => b.id === blockId);
+        const nextDone = current ? !current.done : true;
+        toggleBlockDoneFs(uid, wkey, day, blockId, nextDone).catch((e) => console.error('Failed to toggle block:', e));
     };
 
     const saveBlockEdit = (updatedBlock: ScheduleBlock) => {
@@ -128,15 +142,35 @@ export const DungeonMap: React.FC = () => {
                 ...prev,
                 [dayKey]: {
                     ...prev[dayKey],
-                    blocks: prev[dayKey].blocks.map((block) =>
+                    blocks: (prev[dayKey]?.blocks || []).map((block) =>
                         block.id === updatedBlock.id ? updatedBlock : block
                     ),
                 },
             }));
+            const wkey = getWeekKey(weekStartDate);
+            updateBlockFs(uid, wkey, updatedBlock).catch((e) => console.error('Failed to update block:', e));
         }
         setIsEditDialogOpen(false);
         setEditingBlock(null);
     };
+
+    // Listen to the current week doc and user logs in Firestore to hydrate UI
+    useEffect(() => {
+        if (!uid) return;
+        const wkey = getWeekKey(weekStartDate);
+        const unsubWeek = listenWeek(uid, wkey, (doc) => {
+            if (doc?.data) {
+                // Merge with defaults to ensure all days exist
+                setWeekData((prev) => ({ ...defaultWeekData, ...doc.data }));
+            }
+        });
+        const unsubLogs = listenDungeonLogs(uid, (logs) => setDungeonLogs(logs));
+        return () => {
+            unsubWeek();
+            unsubLogs();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [uid, weekStartDate]);
 
     const exportData = () => {
         const dataStr = JSON.stringify({ weekData, dungeonLogs }, null, 2);

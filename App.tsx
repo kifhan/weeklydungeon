@@ -2,74 +2,81 @@
 import React, { useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from './firebase';
-import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { Button } from './components/ui/Button';
+import { GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import { DungeonMap } from './components/DungeonMap';
-import { HabitTracker } from './components/HabitTracker';
-import { MapPin, Brain } from 'lucide-react';
+import { Header } from './components/Header';
+import { MainContent } from './components/MainContent';
+import { IntroSection } from './components/IntroSection';
 
 export default function App() {
   const [user, loading] = useAuthState(auth);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
-  const [mainTab, setMainTab] = useState<'dungeon' | 'tracker'>('dungeon');
-
-  const signInWithGoogle = () => {
-    const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider);
+  const signInWithGoogle = async () => {
+    try {
+      setSigningIn(true);
+      setAuthError(null);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      setAuthError(error.message || 'Failed to sign in with Google');
+    } finally {
+      setSigningIn(false);
+    }
   };
 
-  const logOut = () => {
-    signOut(auth);
+  const signInAsGuest = async () => {
+    try {
+      setSigningIn(true);
+      setAuthError(null);
+      await signInAnonymously(auth);
+    } catch (error: any) {
+      setAuthError(error.message || 'Failed to sign in anonymously');
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const logOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (error: any) {
+      setAuthError(error.message || 'Failed to sign out');
+    }
   };
 
   if (loading) {
     return (
-      <div className="p-4 text-center">
-        <h1>Loading...</h1>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h1 className="text-xl text-gray-800 dark:text-white">Loading...</h1>
+        </div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="p-4 text-center">
-        <h1>Welcome</h1>
-        <p>Please sign in to continue.</p>
-        <Button onClick={signInWithGoogle}>Sign in with Google</Button>
-      </div>
+      <IntroSection 
+        onSignIn={signInWithGoogle}
+        onSignInAnon={signInAsGuest}
+        authError={authError}
+        signingIn={signingIn}
+      />
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans">
       <div className="max-w-7xl mx-auto">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">🗺️ Personal Management System</h1>
-          <p className="text-lg text-gray-600 dark:text-gray-300">RPG-Style Scheduling & Daily Habit Tracking</p>
-      </header>
-
-        <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'dungeon' | 'tracker')} className="mb-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="dungeon" className="flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              Weekly Dungeon Map
-            </TabsTrigger>
-            <TabsTrigger value="tracker" className="flex items-center gap-2">
-              <Brain className="w-4 h-4" />
-              Daily State & Habit Tracker
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dungeon">
-      <DungeonMap />
-          </TabsContent>
-
-          <TabsContent value="tracker">
-            <HabitTracker />
-          </TabsContent>
-        </Tabs>
+        <Header 
+          user={user}
+          onLogOut={logOut}
+          authError={authError}
+        />
+        <MainContent user={user} />
       </div>
     </div>
   );

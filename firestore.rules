@@ -1,6 +1,66 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAuthed(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isStringField(name, maxLen) {
+      return name in request.resource.data && request.resource.data[name] is string && request.resource.data[name].size() <= maxLen;
+    }
+
+    // Per-user document tree
+    match /users/{uid} {
+      allow read: if isAuthed(uid);
+      allow write: if isAuthed(uid);
+
+      // Boards (Kanban)
+      match /boards/{boardId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+        match /columns/{columnId} {
+          allow read, write: if request.auth != null && request.auth.uid == uid;
+        }
+        match /cards/{cardId} {
+          allow read, write: if request.auth != null && request.auth.uid == uid;
+        }
+      }
+
+      // Habits
+      match /habits/{habitId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) &&
+          isStringField('id', 200) &&
+          isStringField('date', 20) &&
+          isStringField('time', 20) &&
+          isStringField('state', 40) &&
+          isStringField('statusMemo', 2000) &&
+          isStringField('trigger', 2000) &&
+          isStringField('action', 2000);
+        allow delete: if isAuthed(uid);
+      }
+
+      // Weeks
+      match /weeks/{weekKey} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && isStringField('weekKey', 20) && isStringField('weekStartDate', 20) && ('data' in request.resource.data);
+        allow delete: if isAuthed(uid);
+      }
+
+      // Logs
+      match /logs/{logId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) &&
+          isStringField('id', 200) &&
+          isStringField('blockId', 200) &&
+          isStringField('blockName', 500) &&
+          isStringField('day', 20) &&
+          ('energyLevel' in request.resource.data && request.resource.data.energyLevel is number) &&
+          isStringField('blockType', 40);
+        allow delete: if isAuthed(uid);
+      }
+    }
+
+    // Deny everything else
     match /{document=**} {
       allow read, write: if false;
     }
