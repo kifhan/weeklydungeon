@@ -1,4 +1,6 @@
 {
-  "firebase_hosting": {},
+  "firebase_hosting": {
+    "deploymentHostingUrl": "https://weeklydungeon.web.app"
+  },
   "gemini_api": {}
 }
