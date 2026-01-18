@@ -29,6 +29,8 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   authError,
   signingIn,
 }) => {
+  const uid = user?.uid;
+
   return (
     <Routes>
       <Route
@@ -57,14 +59,20 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       >
         <Route index element={<Navigate to="/quests" replace />} />
-        <Route path="quests" element={<QuestsPage uid={user!.uid} />} />
-        <Route path="journal" element={<JournalPage uid={user!.uid} />} />
-        <Route path="character" element={<CharacterPage uid={user!.uid} />} />
+        <Route path="quests" element={uid ? <QuestsPage uid={uid} /> : <Navigate to="/login" replace />} />
+        <Route path="journal" element={uid ? <JournalPage uid={uid} /> : <Navigate to="/login" replace />} />
+        <Route path="character" element={uid ? <CharacterPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="life" element={<Navigate to="/life/inbox" replace />} />
-        <Route path="life/answer/delivery/:deliveryId" element={<LifeAnswerDeliveryPage uid={user!.uid} />} />
-        <Route path="life/answer/question/:questionId" element={<LifeAnswerQuestionPage uid={user!.uid} />} />
-        <Route path="life/answers/:answerId" element={<LifeAnswerDetailPage uid={user!.uid} />} />
-        <Route path="life/:tab" element={<LifePage uid={user!.uid} />} />
+        <Route
+          path="life/answer/delivery/:deliveryId"
+          element={uid ? <LifeAnswerDeliveryPage uid={uid} /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="life/answer/question/:questionId"
+          element={uid ? <LifeAnswerQuestionPage uid={uid} /> : <Navigate to="/login" replace />}
+        />
+        <Route path="life/answers/:answerId" element={uid ? <LifeAnswerDetailPage uid={uid} /> : <Navigate to="/login" replace />} />
+        <Route path="life/:tab" element={uid ? <LifePage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

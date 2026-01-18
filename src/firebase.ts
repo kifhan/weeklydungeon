@@ -1,7 +1,11 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 import { getFunctions } from "firebase/functions";
 
@@ -21,15 +25,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence);
-const db = getFirestore(app);
-
-// Enable offline persistence (best-effort)
-try {
-  enableIndexedDbPersistence(db);
-} catch (err) {
-  // eslint-disable-next-line no-console
-  console.warn("Firestore persistence could not be enabled:", err);
-}
+const db = initializeFirestore(app, {
+  // Replaces enableIndexedDbPersistence(); allows IndexedDB persistence.
+  // Multiple-tab manager is a good default for web apps.
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 // Initialize Functions
 const functions = getFunctions(app);
