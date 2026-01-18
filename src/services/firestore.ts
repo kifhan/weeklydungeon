@@ -211,6 +211,172 @@ export async function moveCard(
   await batch.commit();
 }
 
+// ========== Quest Board Helpers ==========
+const QUESTS_BOARD_ID = 'quests';
+const DEFAULT_COLUMNS = [
+  { id: 'backlog', name: 'backlog', title: 'Backlog', order: 0 },
+  { id: 'today', name: 'today', title: 'Today', order: 1 },
+  { id: 'in_progress', name: 'in_progress', title: 'In Progress', order: 2 },
+  { id: 'done', name: 'done', title: 'Done', order: 3 },
+];
+
+export async function ensureQuestsBoardExists(uid: string): Promise<string> {
+  const boardId = QUESTS_BOARD_ID;
+  const boardRef = boardDoc(uid, boardId);
+  const boardSnap = await getDoc(boardRef);
+
+  if (!boardSnap.exists()) {
+    // Create board
+    await createBoard(uid, { id: boardId, name: 'Quest Board' });
+
+    // Create default columns
+    const batch = writeBatch(db);
+    DEFAULT_COLUMNS.forEach((col) => {
+      const colRef = columnDoc(uid, boardId, col.id);
+      batch.set(colRef, {
+        id: col.id,
+        name: col.name,
+        order: col.order,
+        title: col.title,
+        theme: null,
+        cardOrder: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+
+  return boardId;
+}
+
+export async function addCardToColumn(
+  uid: string,
+  boardId: string,
+  columnId: string,
+  card: Omit<Card, 'id'>,
+  position: 'top' | 'bottom' = 'bottom'
+): Promise<string> {
+  const cardId = await createCard(uid, boardId, card);
+  const colRef = columnDoc(uid, boardId, columnId);
+  const colSnap = await getDoc(colRef);
+  const colData = colSnap.data() as Column | undefined;
+  if (!colData) throw new Error(`Column ${columnId} not found`);
+
+  const newOrder = position === 'top' 
+    ? [cardId, ...colData.cardOrder]
+    : [...colData.cardOrder, cardId];
+
+  await updateColumn(uid, boardId, columnId, { cardOrder: newOrder });
+  return cardId;
+}
+
+export async function reorderCardInColumn(
+  uid: string,
+  boardId: string,
+  columnId: string,
+  cardId: string,
+  newIndex: number
+): Promise<void> {
+  const colRef = columnDoc(uid, boardId, columnId);
+  const colSnap = await getDoc(colRef);
+  const colData = colSnap.data() as Column | undefined;
+  if (!colData) return;
+
+  const currentOrder = [...colData.cardOrder];
+  const oldIndex = currentOrder.indexOf(cardId);
+  if (oldIndex === -1) return;
+
+  currentOrder.splice(oldIndex, 1);
+  currentOrder.splice(newIndex, 0, cardId);
+
+  await updateColumn(uid, boardId, columnId, { cardOrder: currentOrder });
+}
+
+// ========== Migration from WeekData to Kanban Board ==========
+function getCurrentDayKey(date: Date): string {
+  const dayIndex = date.getDay();
+  const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  if (dayIndex === 0) return DAYS[6];
+  return DAYS[dayIndex - 1];
+}
+
+export async function migrateWeekDataToQuestsBoard(uid: string, weekKey: string, weekData: WeekData): Promise<void> {
+  const boardId = await ensureQuestsBoardExists(uid);
+  
+  // Check if board already has cards (don't migrate if it does)
+  const cardsSnap = await getDocs(query(cardsCol(uid, boardId), limit(1)));
+  if (!cardsSnap.empty) {
+    // Board already has data, skip migration
+    return;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayDayKey = getCurrentDayKey(today);
+  
+  const batch = writeBatch(db);
+  const cardIdsByColumn: Record<string, string[]> = {
+    backlog: [],
+    today: [],
+    in_progress: [],
+    done: [],
+  };
+
+  // Convert all blocks to cards
+  for (const [dayKey, dayData] of Object.entries(weekData)) {
+    if (!dayData?.blocks) continue;
+    
+    for (const block of dayData.blocks) {
+      const cardId = block.id || crypto.randomUUID();
+      const cardRef = cardDoc(uid, boardId, cardId);
+      
+      // Determine target column
+      let targetColumn = 'backlog';
+      if (block.done) {
+        targetColumn = 'done';
+      } else if (dayKey === todayDayKey) {
+        targetColumn = 'today';
+      }
+      
+      // Preserve original day context in note
+      const originalNote = block.note || '';
+      const dayContext = `[Originally for ${dayKey}]`;
+      const enhancedNote = originalNote ? `${originalNote} ${dayContext}` : dayContext;
+      
+      batch.set(cardRef, {
+        id: cardId,
+        title: block.name,
+        startTime: block.startTime || null,
+        endTime: block.endTime || null,
+        emoji: block.emoji || '📜',
+        note: enhancedNote,
+        blockType: block.blockType || null,
+        energyLevel: block.energyLevel || null,
+        done: block.done || false,
+        reflectionNote: block.reflectionNote || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      
+      cardIdsByColumn[targetColumn].push(cardId);
+    }
+  }
+
+  // Update column cardOrders
+  for (const [columnId, cardIds] of Object.entries(cardIdsByColumn)) {
+    if (cardIds.length > 0) {
+      const colRef = columnDoc(uid, boardId, columnId);
+      batch.update(colRef, {
+        cardOrder: cardIds,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  await batch.commit();
+}
+
 // ========== Habits (kept for feature parity) ==========
 const habitsCol = (uid: string) => collection(userDoc(uid), 'habits');
 
@@ -642,6 +808,14 @@ export function listenDeliveries(uid: string, cb: (deliveries: Delivery[]) => vo
 
 export async function updateDelivery(uid: string, id: string, patch: Partial<Delivery>) {
   await updateDoc(deliveryDoc(uid, id), patch);
+}
+
+export async function addDelivery(uid: string, delivery: Delivery) {
+  await setDoc(deliveryDoc(uid, delivery.id), {
+    ...delivery,
+    createdAt: serverTimestamp(),
+    sentAt: serverTimestamp(),
+  });
 }
 
 // ========== Notification Tokens ==========

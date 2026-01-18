@@ -1,23 +1,25 @@
-import * as functions from 'firebase-functions/v2';
-import * as admin from 'firebase-admin';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as functions from "firebase-functions/v2";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type { DocumentData } from "firebase-admin/firestore";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 // Note: For production cron parsing, use a proper library like node-cron or later
 
 admin.initializeApp();
 const db = getFirestore();
 
-const GEMINI_API_KEY = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // ========== Notification Token Registration ==========
 export const registerNotificationToken = functions.https.onCall(async (request) => {
   const { uid, token, platform } = request.data;
   if (!uid || !token || !platform) {
-    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields");
   }
 
-  const tokenRef = db.collection('users').doc(uid).collection('notificationTokens').doc(token);
+  const tokenRef = db.collection("users").doc(uid).collection("notificationTokens").doc(token);
   await tokenRef.set({
     token,
     platform,
@@ -32,29 +34,29 @@ export const registerNotificationToken = functions.https.onCall(async (request) 
 export const parseSchedulePrompt = functions.https.onCall(async (request) => {
   const { uid, prompt, timezone } = request.data;
   if (!uid || !prompt) {
-    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields");
   }
 
   if (!genAI) {
-    throw new functions.https.HttpsError('failed-precondition', 'Gemini API key not configured');
+    throw new functions.https.HttpsError("failed-precondition", "Gemini API key not configured");
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const now = new Date().toISOString();
     const parsePrompt = `Parse the following natural language schedule request.
 Return ONLY a JSON object with fields: start_iso, end_iso, count (integer).
-Use timezone: ${timezone || 'UTC'}. Current time is ${now}.
+Use timezone: ${timezone || "UTC"}. Current time is ${now}.
 Schedule request: "${prompt.trim()}"
 
 Example response: {"start_iso": "2025-01-20T09:00:00Z", "end_iso": "2025-01-24T18:00:00Z", "count": 3}`;
 
     const result = await model.generateContent(parsePrompt);
-    const text = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '').trim();
+    const text = result.response.text().trim().replace(/```json/g, "").replace(/```/g, "").trim();
     const parsed = JSON.parse(text);
 
     if (!parsed?.start_iso || !parsed?.end_iso || !parsed?.count) {
-      throw new Error('Invalid schedule response');
+      throw new Error("Invalid schedule response");
     }
 
     const start = new Date(parsed.start_iso);
@@ -63,8 +65,9 @@ Example response: {"start_iso": "2025-01-20T09:00:00Z", "end_iso": "2025-01-24T1
 
     const slots = generateRandomSlots(start, end, count);
     return { slots, start_iso: parsed.start_iso, end_iso: parsed.end_iso, count };
-  } catch (error: any) {
-    throw new functions.https.HttpsError('internal', `Failed to parse schedule: ${error.message}`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new functions.https.HttpsError("internal", `Failed to parse schedule: ${message}`);
   }
 });
 
@@ -106,21 +109,21 @@ function roundToFiveMinutes(date: Date): Date {
 export const confirmGeneratedSchedule = functions.https.onCall(async (request) => {
   const { uid, reservationBase, slots } = request.data;
   if (!uid || !reservationBase || !Array.isArray(slots) || slots.length === 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields");
   }
 
   const batch = db.batch();
-  const settingsRef = db.collection('users').doc(uid).collection('settings').doc('lifeQuestions');
+  const settingsRef = db.collection("users").doc(uid).collection("settings").doc("lifeQuestions");
   const settingsSnap = await settingsRef.get();
-  const timezone = settingsSnap.exists() ? (settingsSnap.data()?.timezone || 'UTC') : 'UTC';
+  const timezone = settingsSnap.exists ? (settingsSnap.data()?.timezone || "UTC") : "UTC";
 
   for (const slot of slots) {
     const resId = `res-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const resRef = db.collection('users').doc(uid).collection('questionReservations').doc(resId);
+    const resRef = db.collection("users").doc(uid).collection("questionReservations").doc(resId);
     batch.set(resRef, {
       id: resId,
       ...reservationBase,
-      type: 'AI_GENERATED',
+      type: "AI_GENERATED",
       targetTime: slot,
       nextRunAt: admin.firestore.Timestamp.fromDate(new Date(slot)),
       timezone,
@@ -135,38 +138,38 @@ export const confirmGeneratedSchedule = functions.https.onCall(async (request) =
 
 // ========== Generate Meta Question (RAG) ==========
 async function generateMetaQuestion(uid: string, metaQuestionId: string): Promise<string> {
-  const metaRef = db.collection('users').doc(uid).collection('metaQuestions').doc(metaQuestionId);
+  const metaRef = db.collection("users").doc(uid).collection("metaQuestions").doc(metaQuestionId);
   const metaSnap = await metaRef.get();
-  if (!metaSnap.exists()) {
-    throw new Error('Meta question not found');
+  if (!metaSnap.exists) {
+    throw new Error("Meta question not found");
   }
   const meta = metaSnap.data()!;
-  const basePrompt = meta.basePrompt || '';
+  const basePrompt = meta.basePrompt || "";
 
   // Retrieve recent contexts using vector search (if available) or recent N
-  const contextsRef = db.collection('users').doc(uid).collection('questionContexts');
+  const contextsRef = db.collection("users").doc(uid).collection("questionContexts");
   let contexts: Array<{ summary: string }> = [];
 
   try {
-      // Use most recent contexts (vector search requires proper setup with findNearest)
-      // For now, we'll use recent contexts - full vector search can be added later
-      const recentContexts = await contextsRef.orderBy('createdAt', 'desc').limit(5).get();
-      contexts = recentContexts.docs.map((d) => ({ summary: d.data().summary || '' }));
-    } catch (error) {
-      // Fallback to recent contexts
-      const recentContexts = await contextsRef.orderBy('createdAt', 'desc').limit(5).get();
-      contexts = recentContexts.docs.map((d) => ({ summary: d.data().summary || '' }));
-    }
+    // Use most recent contexts (vector search requires proper setup with findNearest)
+    // For now, we'll use recent contexts - full vector search can be added later
+    const recentContexts = await contextsRef.orderBy("createdAt", "desc").limit(5).get();
+    contexts = recentContexts.docs.map((d) => ({ summary: d.data().summary || "" }));
+  } catch {
+    // Fallback to recent contexts
+    const recentContexts = await contextsRef.orderBy("createdAt", "desc").limit(5).get();
+    contexts = recentContexts.docs.map((d) => ({ summary: d.data().summary || "" }));
+  }
 
   if (!genAI) {
     return basePrompt; // Fallback
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const contextText = contexts.length > 0
-      ? contexts.map((c) => c.summary).join('\n')
-      : '- No recent context available.';
+      ? contexts.map((c) => c.summary).join("\n")
+      : "- No recent context available.";
 
     const prompt = `You are generating a single personalized question for a user.
 Base prompt: ${basePrompt}
@@ -177,28 +180,28 @@ Return ONE question sentence only, no extra text.`;
 
     const result = await model.generateContent(prompt);
     return result.response.text().trim();
-  } catch (error) {
+  } catch {
     return basePrompt; // Fallback
   }
 }
 
-// ========== Scheduler (runs every minute) ==========
-export const scanReservations = functions.scheduler.onSchedule('every 1 minutes', async (event) => {
+// ========== Scheduler (runs every 10 minutes) ==========
+export const scanReservations = functions.scheduler.onSchedule("every 10 minutes", async () => {
   const now = admin.firestore.Timestamp.now();
-  const usersRef = db.collection('users');
+  const usersRef = db.collection("users");
 
   // Get all users (in production, consider pagination or user-specific scheduling)
   const usersSnap = await usersRef.get();
 
   for (const userDoc of usersSnap.docs) {
     const uid = userDoc.id;
-    const reservationsRef = userDoc.ref.collection('questionReservations');
+    const reservationsRef = userDoc.ref.collection("questionReservations");
 
     // Query reservations where nextRunAt <= now and not processed (for FIXED/AI_GENERATED)
     // or RECURRING that need to run
     const dueReservations = await reservationsRef
-      .where('nextRunAt', '<=', now)
-      .where('isProcessed', '==', false)
+      .where("nextRunAt", "<=", now)
+      .where("isProcessed", "==", false)
       .limit(50)
       .get();
 
@@ -209,8 +212,8 @@ export const scanReservations = functions.scheduler.onSchedule('every 1 minutes'
 
     // Also check RECURRING reservations
     const recurringReservations = await reservationsRef
-      .where('type', '==', 'RECURRING')
-      .where('isProcessed', '==', false)
+      .where("type", "==", "RECURRING")
+      .where("isProcessed", "==", false)
       .limit(50)
       .get();
 
@@ -231,17 +234,17 @@ export const scanReservations = functions.scheduler.onSchedule('every 1 minutes'
 async function processReservation(
   uid: string,
   reservationId: string,
-  reservation: any,
+  reservation: DocumentData,
   now: admin.firestore.Timestamp
 ): Promise<void> {
-  let questionText = '';
+  let questionText = "";
 
   if (reservation.questionId) {
     // Manual question
-    const questionRef = db.collection('users').doc(uid).collection('questions').doc(reservation.questionId);
+    const questionRef = db.collection("users").doc(uid).collection("questions").doc(reservation.questionId);
     const questionSnap = await questionRef.get();
-    if (questionSnap.exists()) {
-      questionText = questionSnap.data()!.content || '';
+    if (questionSnap.exists) {
+      questionText = questionSnap.data()!.content || "";
     }
   } else if (reservation.metaQuestionId) {
     // Meta question - generate with RAG
@@ -249,9 +252,9 @@ async function processReservation(
       questionText = await generateMetaQuestion(uid, reservation.metaQuestionId);
     } catch (error) {
       console.error(`Failed to generate meta question for ${reservationId}:`, error);
-      const metaRef = db.collection('users').doc(uid).collection('metaQuestions').doc(reservation.metaQuestionId);
+      const metaRef = db.collection("users").doc(uid).collection("metaQuestions").doc(reservation.metaQuestionId);
       const metaSnap = await metaRef.get();
-      questionText = metaSnap.exists() ? (metaSnap.data()!.basePrompt || '') : '';
+      questionText = metaSnap.exists ? (metaSnap.data()!.basePrompt || "") : "";
     }
   }
 
@@ -261,7 +264,7 @@ async function processReservation(
   }
 
   // Get notification tokens
-  const tokensRef = db.collection('users').doc(uid).collection('notificationTokens');
+  const tokensRef = db.collection("users").doc(uid).collection("notificationTokens");
   const tokensSnap = await tokensRef.get();
 
   if (tokensSnap.empty) {
@@ -271,14 +274,14 @@ async function processReservation(
 
   // Create delivery
   const deliveryId = `delivery-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const deliveryRef = db.collection('users').doc(uid).collection('deliveries').doc(deliveryId);
+  const deliveryRef = db.collection("users").doc(uid).collection("deliveries").doc(deliveryId);
   const scheduledFor = reservation.nextRunAt?.toDate() || reservation.targetTime
     ? admin.firestore.Timestamp.fromDate(new Date(reservation.targetTime))
     : now;
 
   // Send FCM notifications
   const messaging = admin.messaging();
-  const sendPromises: Promise<any>[] = [];
+  const sendPromises: Array<Promise<unknown>> = [];
 
   for (const tokenDoc of tokensSnap.docs) {
     const tokenData = tokenDoc.data();
@@ -288,27 +291,27 @@ async function processReservation(
       messaging.send({
         token,
         notification: {
-          title: 'Life Question',
+          title: "Life Question",
           body: questionText,
         },
         data: {
           deliveryId,
           reservationId,
           questionText,
-          type: 'life_question',
+          type: "life_question",
         },
         webpush: {
           notification: {
-            title: 'Life Question',
+            title: "Life Question",
             body: questionText,
-            icon: '/favicon.ico',
+            icon: "/favicon.ico",
           },
         },
       }).catch((error) => {
         console.error(`Failed to send FCM to token ${token}:`, error);
         // Mark invalid tokens for cleanup
-        if (error.code === 'messaging/invalid-registration-token' ||
-            error.code === 'messaging/registration-token-not-registered') {
+        if (error.code === "messaging/invalid-registration-token" ||
+            error.code === "messaging/registration-token-not-registered") {
           return tokenDoc.ref.delete();
         }
         return null;
@@ -317,14 +320,14 @@ async function processReservation(
   }
 
   const results = await Promise.allSettled(sendPromises);
-  const sentCount = results.filter((r) => r.status === 'fulfilled').length;
-  const status = sentCount > 0 || tokensSnap.empty ? 'SENT' : 'FAILED';
+  const sentCount = results.filter((r) => r.status === "fulfilled").length;
+  const status = sentCount > 0 || tokensSnap.empty ? "SENT" : "FAILED";
 
   await deliveryRef.set({
     id: deliveryId,
     reservationId,
     questionText,
-    channel: 'FCM',
+    channel: "FCM",
     status,
     scheduledFor: scheduledFor.toDate().toISOString(),
     sentAt: FieldValue.serverTimestamp(),
@@ -332,8 +335,8 @@ async function processReservation(
   });
 
   // Update reservation
-  const resRef = db.collection('users').doc(uid).collection('questionReservations').doc(reservationId);
-  if (reservation.type === 'FIXED' || reservation.type === 'AI_GENERATED') {
+  const resRef = db.collection("users").doc(uid).collection("questionReservations").doc(reservationId);
+  if (reservation.type === "FIXED" || reservation.type === "AI_GENERATED") {
     await resRef.update({
       isProcessed: true,
       lastRunAt: FieldValue.serverTimestamp(),
@@ -341,15 +344,14 @@ async function processReservation(
     });
 
     // Mark question as DONE if FIXED
-    if (reservation.type === 'FIXED' && reservation.questionId) {
-      const questionRef = db.collection('users').doc(uid).collection('questions').doc(reservation.questionId);
-      await questionRef.update({ status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
+    if (reservation.type === "FIXED" && reservation.questionId) {
+      const questionRef = db.collection("users").doc(uid).collection("questions").doc(reservation.questionId);
+      await questionRef.update({ status: "DONE", updatedAt: FieldValue.serverTimestamp() });
     }
-  } else if (reservation.type === 'RECURRING' && reservation.cronExpression) {
+  } else if (reservation.type === "RECURRING" && reservation.cronExpression) {
     // Compute next run time
-    const timezone = reservation.timezone || 'UTC';
     const lastRun = reservation.lastRunAt?.toDate() || new Date();
-    const nextRun = computeNextCronRun(reservation.cronExpression, lastRun, timezone);
+    const nextRun = computeNextCronRun(reservation.cronExpression, lastRun);
 
     await resRef.update({
       nextRunAt: admin.firestore.Timestamp.fromDate(nextRun),
@@ -359,16 +361,18 @@ async function processReservation(
   }
 }
 
-function computeNextCronRun(cronExpression: string, fromDate: Date, timezone: string): Date {
+function computeNextCronRun(cronExpression: string, fromDate: Date): Date {
   // Simplified cron parser - for production, use a proper library
   // This handles basic patterns like "0 9 * * 1" (Monday 9 AM)
   try {
     const parts = cronExpression.trim().split(/\s+/);
     if (parts.length !== 5) {
-      throw new Error('Invalid cron expression');
+      throw new Error("Invalid cron expression");
     }
 
-    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+    const minute = parts[0];
+    const hour = parts[1];
+    const dayOfWeek = parts[4];
     const next = new Date(fromDate);
     
     // Set time
@@ -380,7 +384,7 @@ function computeNextCronRun(cronExpression: string, fromDate: Date, timezone: st
     // If time has passed today, move to next occurrence
     if (next.getTime() <= fromDate.getTime()) {
       // Simple increment: add 24 hours (for daily) or 7 days (for weekly)
-      if (dayOfWeek !== '*') {
+      if (dayOfWeek !== "*") {
         // Weekly pattern
         next.setDate(next.getDate() + 7);
       } else {
@@ -390,7 +394,7 @@ function computeNextCronRun(cronExpression: string, fromDate: Date, timezone: st
     }
 
     return next;
-  } catch (error) {
+  } catch {
     // Fallback: add 24 hours
     const next = new Date(fromDate);
     next.setHours(next.getHours() + 24);
@@ -399,80 +403,83 @@ function computeNextCronRun(cronExpression: string, fromDate: Date, timezone: st
 }
 
 // ========== Post-Answer Processing (Firestore Trigger) ==========
-export const onAnswerCreate = functions.firestore
-  .document('users/{uid}/answers/{answerId}')
-  .onCreate(async (snap, context) => {
-    const answer = snap.data();
-    const uid = context.params.uid;
-    const answerId = context.params.answerId;
+export const onAnswerCreate = onDocumentCreated("users/{uid}/answers/{answerId}", async (event) => {
+  const snap = event.data;
+  if (!snap) {
+    return;
+  }
 
-    // Check if context already exists (idempotency)
-    const existingContext = await db
-      .collection('users').doc(uid)
-      .collection('questionContexts')
-      .where('answerId', '==', answerId)
-      .limit(1)
-      .get();
+  const answer = snap.data();
+  const uid = event.params.uid;
+  const answerId = event.params.answerId;
 
-    if (!existingContext.empty) {
-      console.log(`Context already exists for answer ${answerId}`);
-      return;
-    }
+  // Check if context already exists (idempotency)
+  const existingContext = await db
+    .collection("users").doc(uid)
+    .collection("questionContexts")
+    .where("answerId", "==", answerId)
+    .limit(1)
+    .get();
 
-    const questionText = answer.sourceQuestionText || '';
-    const answerText = answer.answerContent || '';
+  if (!existingContext.empty) {
+    console.log(`Context already exists for answer ${answerId}`);
+    return;
+  }
 
-    if (!questionText || !answerText) {
-      console.warn(`Incomplete answer data for ${answerId}`);
-      return;
-    }
+  const questionText = answer.sourceQuestionText || "";
+  const answerText = answer.answerContent || "";
 
-    // Generate summary
-    let summary = answerText.slice(0, 280); // Fallback
-    if (genAI) {
-      try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const prompt = `Summarize the following Q&A into up to 3 plain sentences of user context.
+  if (!questionText || !answerText) {
+    console.warn(`Incomplete answer data for ${answerId}`);
+    return;
+  }
+
+  // Generate summary
+  let summary = answerText.slice(0, 280); // Fallback
+  if (genAI) {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const prompt = `Summarize the following Q&A into up to 3 plain sentences of user context.
 Question: "${questionText}"
 Answer: "${answerText}"
 Return only the summary.`;
 
-        const result = await model.generateContent(prompt);
-        summary = result.response.text().trim();
-      } catch (error) {
-        console.error(`Failed to generate summary for ${answerId}:`, error);
-      }
+      const result = await model.generateContent(prompt);
+      summary = result.response.text().trim();
+    } catch (error) {
+      console.error(`Failed to generate summary for ${answerId}:`, error);
     }
+  }
 
-    // Generate embedding (using Vertex AI or Gemini embedding)
-    let embedding: number[] | null = null;
-    if (genAI) {
-      try {
-        // Use text-embedding-004 or similar
-        // For now, we'll use a placeholder - in production, use Vertex AI Embeddings API
-        // This requires additional setup with @google-cloud/aiplatform
-        // For MVP, we'll store summary and add embedding later
-        embedding = null; // TODO: Implement Vertex AI embedding
-      } catch (error) {
-        console.error(`Failed to generate embedding for ${answerId}:`, error);
-      }
+  // Generate embedding (using Vertex AI or Gemini embedding)
+  let embedding: number[] | null = null;
+  if (genAI) {
+    try {
+      // Use text-embedding-004 or similar
+      // For now, we'll use a placeholder - in production, use Vertex AI Embeddings API
+      // This requires additional setup with @google-cloud/aiplatform
+      // For MVP, we'll store summary and add embedding later
+      embedding = null; // TODO: Implement Vertex AI embedding
+    } catch (error) {
+      console.error(`Failed to generate embedding for ${answerId}:`, error);
     }
+  }
 
-    // Store context
-    const contextId = `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const contextRef = db.collection('users').doc(uid).collection('questionContexts').doc(contextId);
+  // Store context
+  const contextId = `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const contextRef = db.collection("users").doc(uid).collection("questionContexts").doc(contextId);
 
-    const contextData: any = {
-      id: contextId,
-      answerId,
-      summary,
-      createdAt: FieldValue.serverTimestamp(),
-    };
+  const contextData: DocumentData = {
+    id: contextId,
+    answerId,
+    summary,
+    createdAt: FieldValue.serverTimestamp(),
+  };
 
-    if (embedding) {
-      // Store as Firestore Vector type
-      contextData.embedding = FieldValue.vector(embedding);
-    }
+  if (embedding) {
+    // Store as Firestore Vector type
+    contextData.embedding = FieldValue.vector(embedding);
+  }
 
-    await contextRef.set(contextData);
-  });
+  await contextRef.set(contextData);
+});

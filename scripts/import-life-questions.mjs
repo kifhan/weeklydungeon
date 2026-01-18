@@ -75,6 +75,21 @@ const extractQuestions = (markdown) => {
   return questions;
 };
 
+const resolveProjectId = async () => {
+  if (process.env.FIREBASE_PROJECT_ID) return process.env.FIREBASE_PROJECT_ID;
+  if (process.env.GOOGLE_CLOUD_PROJECT) return process.env.GOOGLE_CLOUD_PROJECT;
+
+  const rcPath = path.resolve(process.cwd(), '.firebaserc');
+  try {
+    const raw = await fs.readFile(rcPath, 'utf8');
+    const data = JSON.parse(raw);
+    const defaultProject = data?.projects?.default;
+    return typeof defaultProject === 'string' ? defaultProject : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const main = async () => {
   const args = parseArgs();
   const uid = args.get('uid');
@@ -87,6 +102,7 @@ const main = async () => {
   }
 
   const serviceAccountPath = args.get('service-account') || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const projectId = await resolveProjectId();
   if (serviceAccountPath && typeof serviceAccountPath === 'string') {
     const resolved = path.isAbsolute(serviceAccountPath)
       ? serviceAccountPath
@@ -94,15 +110,19 @@ const main = async () => {
     const serviceAccount = JSON.parse(await fs.readFile(resolved, 'utf8'));
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
+      projectId: serviceAccount.project_id || projectId,
     });
   } else {
-    admin.initializeApp();
+    if (projectId) {
+      admin.initializeApp({ projectId });
+    } else {
+      admin.initializeApp();
+    }
   }
 
   const mdPath = fileArg
     ? path.resolve(process.cwd(), fileArg)
-    : path.resolve(__dirname, '..', '..', 'LIFE_QUESTIONS.md');
+    : path.resolve(__dirname, '..', 'LIFE_QUESTIONS.md');
 
   const markdown = await fs.readFile(mdPath, 'utf8');
   const questions = extractQuestions(markdown);

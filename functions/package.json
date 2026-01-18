@@ -4,6 +4,7 @@
   "description": "Cloud Functions for Life Question Bot",
   "main": "lib/index.js",
   "scripts": {
+    "lint": "eslint --ext .js,.ts .",
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
@@ -23,8 +24,13 @@
     "node-cron": "^3.0.3"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "@types/node": "^20.0.0",
     "@types/node-cron": "^3.0.11",
+    "eslint": "^9.0.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.29.0",
     "typescript": "^5.0.0"
   },
   "private": true

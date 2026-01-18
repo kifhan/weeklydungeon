@@ -323,7 +323,7 @@ export const DailyQuestBoard: React.FC<DailyQuestBoardProps> = ({ uid }) => {
     }, [selectedDate]);
 
     const selectedDayKey = getCurrentDayKey(selectedDate);
-    const currentDayData = weekData[selectedDayKey];
+    const currentDayData = weekData[selectedDayKey] || { title: '', theme: '', blocks: [] };
     const dayIndex = DAYS.indexOf(selectedDayKey);
     const dayName = DAY_NAMES[dayIndex];
 

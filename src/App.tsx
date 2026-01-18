@@ -1,12 +1,8 @@
-
 import React, { useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from './firebase';
+import { auth } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
-
-import { Header } from './components/Header';
-import { MainContent } from './components/MainContent';
-import { IntroSection } from './components/IntroSection';
+import { AppRoutes } from '@/routes/AppRoutes';
 
 export default function App() {
   const [user, loading] = useAuthState(auth);
@@ -57,27 +53,14 @@ export default function App() {
     );
   }
 
-  if (!user) {
-    return (
-      <IntroSection 
-        onSignIn={signInWithGoogle}
-        onSignInAnon={signInAsGuest}
-        authError={authError}
-        signingIn={signingIn}
-      />
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans">
-      <div className="max-w-7xl mx-auto">
-        <Header 
-          user={user}
-          onLogOut={logOut}
-          authError={authError}
-        />
-        <MainContent user={user} />
-      </div>
-    </div>
+    <AppRoutes
+      user={user}
+      onSignIn={signInWithGoogle}
+      onSignInAnon={signInAsGuest}
+      onLogOut={logOut}
+      authError={authError}
+      signingIn={signingIn}
+    />
   );
 }
