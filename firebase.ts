@@ -2,6 +2,8 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getMessaging, isSupported } from "firebase/messaging";
+import { getFunctions } from "firebase/functions";
 
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -29,4 +31,17 @@ try {
   console.warn("Firestore persistence could not be enabled:", err);
 }
 
-export { auth, db };
+// Initialize Functions
+const functions = getFunctions(app);
+
+// Initialize Messaging (only in browser)
+let messaging: ReturnType<typeof getMessaging> | null = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      messaging = getMessaging(app);
+    }
+  });
+}
+
+export { auth, db, functions, messaging };

@@ -31,3 +31,7 @@ dist-ssr
 
 # Firebase
 .firebase/
+service-accounts-*
+
+# Generated Firebase config for service worker
+public/firebase-config.js

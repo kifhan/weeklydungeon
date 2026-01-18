@@ -18,7 +18,20 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { formatWeekKey } from '../utils/date';
-import { HabitEntry, DungeonLog, WeekData, ScheduleBlock } from '../types';
+import {
+  HabitEntry,
+  DungeonLog,
+  WeekData,
+  ScheduleBlock,
+  Question,
+  MetaQuestion,
+  QuestionReservation,
+  Answer,
+  QuestionContext,
+  LifeQuestionSettings,
+  Delivery,
+  NotificationToken,
+} from '../types';
 
 // ========== Generalized Kanban Model ==========
 // We generalize the previous "weeks" to a Kanban-like structure so the UI can model week/day columns or any arbitrary columns.
@@ -473,4 +486,177 @@ export async function migrateLocalIfNeeded(
   }
 
   await Promise.all(tasks);
+}
+
+// ========== Life Question Bot ==========
+const questionsCol = (uid: string) => collection(userDoc(uid), 'questions');
+const questionDoc = (uid: string, id: string) => doc(questionsCol(uid), id);
+const metaQuestionsCol = (uid: string) => collection(userDoc(uid), 'metaQuestions');
+const metaQuestionDoc = (uid: string, id: string) => doc(metaQuestionsCol(uid), id);
+const reservationsCol = (uid: string) => collection(userDoc(uid), 'questionReservations');
+const reservationDoc = (uid: string, id: string) => doc(reservationsCol(uid), id);
+const answersCol = (uid: string) => collection(userDoc(uid), 'answers');
+const answerDoc = (uid: string, id: string) => doc(answersCol(uid), id);
+const contextsCol = (uid: string) => collection(userDoc(uid), 'questionContexts');
+const contextDoc = (uid: string, id: string) => doc(contextsCol(uid), id);
+const deliveriesCol = (uid: string) => collection(userDoc(uid), 'deliveries');
+const deliveryDoc = (uid: string, id: string) => doc(deliveriesCol(uid), id);
+const notificationTokensCol = (uid: string) => collection(userDoc(uid), 'notificationTokens');
+const notificationTokenDoc = (uid: string, token: string) => doc(notificationTokensCol(uid), token);
+const lifeSettingsDoc = (uid: string) => doc(db, 'users', uid, 'settings', 'lifeQuestions');
+
+export function listenQuestions(uid: string, cb: (questions: Question[]) => void) {
+  const q = query(questionsCol(uid), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    const list: Question[] = [];
+    snap.forEach((d) => list.push(d.data() as Question));
+    cb(list);
+  });
+}
+
+export async function addQuestion(uid: string, question: Question) {
+  await setDoc(questionDoc(uid, question.id), {
+    ...question,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateQuestion(uid: string, id: string, patch: Partial<Question>) {
+  await updateDoc(questionDoc(uid, id), { ...patch, updatedAt: serverTimestamp() });
+}
+
+export async function deleteQuestion(uid: string, id: string) {
+  await deleteDoc(questionDoc(uid, id));
+}
+
+export function listenMetaQuestions(uid: string, cb: (questions: MetaQuestion[]) => void) {
+  const q = query(metaQuestionsCol(uid), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    const list: MetaQuestion[] = [];
+    snap.forEach((d) => list.push(d.data() as MetaQuestion));
+    cb(list);
+  });
+}
+
+export async function addMetaQuestion(uid: string, metaQuestion: MetaQuestion) {
+  await setDoc(metaQuestionDoc(uid, metaQuestion.id), {
+    ...metaQuestion,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateMetaQuestion(uid: string, id: string, patch: Partial<MetaQuestion>) {
+  await updateDoc(metaQuestionDoc(uid, id), { ...patch, updatedAt: serverTimestamp() });
+}
+
+export async function deleteMetaQuestion(uid: string, id: string) {
+  await deleteDoc(metaQuestionDoc(uid, id));
+}
+
+export function listenQuestionReservations(uid: string, cb: (reservations: QuestionReservation[]) => void) {
+  const q = query(reservationsCol(uid), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    const list: QuestionReservation[] = [];
+    snap.forEach((d) => list.push(d.data() as QuestionReservation));
+    cb(list);
+  });
+}
+
+export async function addQuestionReservation(uid: string, reservation: QuestionReservation) {
+  await setDoc(reservationDoc(uid, reservation.id), {
+    ...reservation,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateQuestionReservation(uid: string, id: string, patch: Partial<QuestionReservation>) {
+  await updateDoc(reservationDoc(uid, id), { ...patch, updatedAt: serverTimestamp() });
+}
+
+export async function deleteQuestionReservation(uid: string, id: string) {
+  await deleteDoc(reservationDoc(uid, id));
+}
+
+export function listenAnswers(uid: string, cb: (answers: Answer[]) => void) {
+  const q = query(answersCol(uid), orderBy('answeredAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    const list: Answer[] = [];
+    snap.forEach((d) => list.push(d.data() as Answer));
+    cb(list);
+  });
+}
+
+export async function addAnswer(uid: string, answer: Answer) {
+  await setDoc(answerDoc(uid, answer.id), {
+    ...answer,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export function listenQuestionContexts(uid: string, cb: (contexts: QuestionContext[]) => void) {
+  const q = query(contextsCol(uid), orderBy('createdAt', 'desc'), limit(100));
+  return onSnapshot(q, (snap) => {
+    const list: QuestionContext[] = [];
+    snap.forEach((d) => list.push(d.data() as QuestionContext));
+    cb(list);
+  });
+}
+
+export async function addQuestionContext(uid: string, context: QuestionContext) {
+  await setDoc(contextDoc(uid, context.id), {
+    ...context,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export function listenLifeQuestionSettings(uid: string, cb: (settings: LifeQuestionSettings | null) => void) {
+  return onSnapshot(lifeSettingsDoc(uid), (snap) => {
+    if (!snap.exists()) return cb(null);
+    cb(snap.data() as LifeQuestionSettings);
+  });
+}
+
+export async function saveLifeQuestionSettings(uid: string, settings: LifeQuestionSettings) {
+  await setDoc(
+    lifeSettingsDoc(uid),
+    {
+      ...settings,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+// ========== Deliveries ==========
+export function listenDeliveries(uid: string, cb: (deliveries: Delivery[]) => void) {
+  const q = query(deliveriesCol(uid), orderBy('createdAt', 'desc'), limit(100));
+  return onSnapshot(q, (snap) => {
+    const list: Delivery[] = [];
+    snap.forEach((d) => list.push(d.data() as Delivery));
+    cb(list);
+  });
+}
+
+export async function updateDelivery(uid: string, id: string, patch: Partial<Delivery>) {
+  await updateDoc(deliveryDoc(uid, id), patch);
+}
+
+// ========== Notification Tokens ==========
+export async function addNotificationToken(uid: string, token: NotificationToken) {
+  await setDoc(notificationTokenDoc(uid, token.token), {
+    ...token,
+    createdAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export function listenNotificationTokens(uid: string, cb: (tokens: NotificationToken[]) => void) {
+  return onSnapshot(notificationTokensCol(uid), (snap) => {
+    const list: NotificationToken[] = [];
+    snap.forEach((d) => list.push(d.data() as NotificationToken));
+    cb(list);
+  });
 }

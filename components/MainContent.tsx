@@ -4,18 +4,19 @@ import { DailyQuestBoard } from './DailyQuestBoard';
 import { HabitTracker } from './HabitTracker';
 import { ForestVisualizer } from './ForestVisualizer';
 import { CharacterScreen } from './CharacterScreen';
-import { MapPin, BookOpen, User as UserIcon } from 'lucide-react';
+import { MapPin, BookOpen, User as UserIcon, Sparkles } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { migrateLocalIfNeeded, getWeekKey } from '../services/firestore';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { WeekData, DungeonLog, HabitEntry, Tree } from '../types';
+import { LifeQuestionHub } from './LifeQuestionHub';
 
 interface MainContentProps {
   user: User;
 }
 
 export function MainContent({ user }: MainContentProps) {
-  const [mainTab, setMainTab] = useState<'quests' | 'journal' | 'character'>('quests');
+  const [mainTab, setMainTab] = useState<'quests' | 'journal' | 'character' | 'life'>('quests');
 
   // One-time migration: if Firestore is empty, push local cached data
   const [weekData] = useLocalStorage<WeekData>('dungeonMapData', {} as any);
@@ -63,8 +64,8 @@ export function MainContent({ user }: MainContentProps) {
     <div className="space-y-8">
       <ForestVisualizer trees={trees} />
 
-      <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'quests' | 'journal' | 'character')} className="mb-6">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'quests' | 'journal' | 'character' | 'life')} className="mb-6">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="quests" className="flex items-center gap-2">
             <MapPin className="w-4 h-4" />
             Daily Quests
@@ -76,6 +77,10 @@ export function MainContent({ user }: MainContentProps) {
           <TabsTrigger value="character" className="flex items-center gap-2">
             <UserIcon className="w-4 h-4" />
             Character
+          </TabsTrigger>
+          <TabsTrigger value="life" className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Life Questions
           </TabsTrigger>
         </TabsList>
 
@@ -89,6 +94,10 @@ export function MainContent({ user }: MainContentProps) {
 
         <TabsContent value="character">
           <CharacterScreen uid={user.uid} />
+        </TabsContent>
+
+        <TabsContent value="life">
+          <LifeQuestionHub uid={user.uid} />
         </TabsContent>
       </Tabs>
     </div>

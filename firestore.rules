@@ -59,6 +59,36 @@ service cloud.firestore {
         allow delete: if isAuthed(uid);
       }
 
+      // Life Question Bot
+      match /questions/{questionId} {
+        allow read, write: if isAuthed(uid);
+      }
+      match /metaQuestions/{metaQuestionId} {
+        allow read, write: if isAuthed(uid);
+      }
+      match /questionReservations/{reservationId} {
+        allow read, write: if isAuthed(uid);
+      }
+      match /answers/{answerId} {
+        allow read, write: if isAuthed(uid);
+      }
+      match /questionContexts/{contextId} {
+        allow read: if isAuthed(uid);
+        // Clients cannot write embeddings (server-only)
+        allow create, update: if isAuthed(uid) && !('embedding' in request.resource.data);
+      }
+      match /deliveries/{deliveryId} {
+        allow read: if isAuthed(uid);
+        // Clients can update status to ACKED only
+        allow update: if isAuthed(uid) && 
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          request.resource.data.status == 'ACKED';
+        // Clients cannot create deliveries (server-only)
+      }
+      match /notificationTokens/{token} {
+        allow read, write: if isAuthed(uid);
+      }
+
       // Settings (Character Profile)
       match /settings/{settingId} {
         allow read: if isAuthed(uid);

@@ -97,3 +97,82 @@ export interface WeekDoc {
   data: WeekData;
   updatedAt?: any; // Firestore Timestamp | string
 }
+
+// ========== Life Question Bot types ==========
+export type QuestionStatus = "DRAFT" | "PUBLISH" | "DONE" | "ARCHIVE";
+export type ReservationType = "FIXED" | "RECURRING" | "AI_GENERATED";
+
+export interface Question {
+  id: string;
+  content: string;
+  status: QuestionStatus;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface MetaQuestion {
+  id: string;
+  basePrompt: string;
+  topicTags: string[];
+  status: "DRAFT" | "PUBLISH" | "ARCHIVE";
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface QuestionReservation {
+  id: string;
+  questionId?: string | null;
+  metaQuestionId?: string | null;
+  type: ReservationType;
+  targetTime?: string | null;
+  cronExpression?: string | null;
+  aiSchedulePrompt?: string | null;
+  isProcessed?: boolean;
+  nextRunAt?: any; // Timestamp for scheduler
+  lastRunAt?: any; // Timestamp for scheduler
+  timezone?: string; // Snapshot at creation
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface Delivery {
+  id: string;
+  reservationId: string;
+  questionText: string;
+  channel: "FCM" | "EMAIL" | "IN_APP";
+  status: "SENT" | "FAILED" | "ACKED";
+  scheduledFor: string; // ISO timestamp
+  sentAt?: any; // Timestamp
+  createdAt?: any;
+}
+
+export interface NotificationToken {
+  token: string;
+  platform: "web" | "ios" | "android";
+  createdAt?: any;
+  lastSeenAt?: any;
+}
+
+export interface Answer {
+  id: string;
+  deliveryId?: string | null;
+  reservationId?: string | null;
+  sourceQuestionText: string;
+  answerContent: string;
+  answeredAt: string;
+  createdAt?: any;
+}
+
+export interface QuestionContext {
+  id: string;
+  answerId: string;
+  summary: string;
+  embedding?: number[] | null; // Firestore Vector type
+  createdAt?: any;
+}
+
+export interface LifeQuestionSettings {
+  timezone: string;
+  notificationChannel?: string;
+  updatedAt?: any;
+}
