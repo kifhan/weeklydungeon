@@ -15,10 +15,10 @@ export function Header({ user, onLogOut, authError }: HeaderProps) {
         <div className="flex-1"></div>
         <div className="flex-1">
           <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
-            🗺️ Personal Management System
+            🗺️ Weekly Dungeon
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300">
-            RPG-Style Scheduling & Daily Habit Tracking
+            Daily Quests & Habit Tracking
           </p>
         </div>
         <div className="flex-1 flex justify-end">

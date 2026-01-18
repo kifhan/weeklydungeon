@@ -58,6 +58,13 @@ service cloud.firestore {
           isStringField('blockType', 40);
         allow delete: if isAuthed(uid);
       }
+
+      // Settings (Character Profile)
+      match /settings/{settingId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid);
+        allow delete: if isAuthed(uid);
+      }
     }
 
     // Deny everything else

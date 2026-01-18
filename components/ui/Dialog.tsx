@@ -50,3 +50,11 @@ export const DialogHeader: React.FC<{ children: React.ReactNode; className?: str
 export const DialogTitle: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
   <h2 className={`text-lg font-semibold ${className || ''}`}>{children}</h2>
 );
+
+export const DialogDescription: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <p className={`text-sm text-gray-500 dark:text-gray-400 ${className || ''}`}>{children}</p>
+);
+
+export const DialogFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <div className={`mt-6 flex justify-end gap-2 ${className || ''}`}>{children}</div>
+);

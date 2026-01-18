@@ -219,6 +219,10 @@ export async function addHabitEntry(uid: string, entry: HabitEntry) {
   });
 }
 
+export async function deleteHabitEntry(uid: string, entryId: string) {
+  await deleteDoc(doc(habitsCol(uid), entryId));
+}
+
 // ========== Logs (kept for feature parity) ==========
 const logsCol = (uid: string) => collection(userDoc(uid), 'logs');
 
@@ -236,6 +240,26 @@ export async function addDungeonLog(uid: string, log: DungeonLog) {
   await setDoc(ref, {
     ...log,
     createdAt: serverTimestamp(),
+  });
+}
+
+// ========== Character Profile ==========
+const profileDoc = (uid: string) => doc(db, 'users', uid, 'settings', 'profile');
+
+export async function saveCharacterProfile(uid: string, profile: any) {
+  await setDoc(profileDoc(uid), {
+    ...profile,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export function listenCharacterProfile(uid: string, cb: (profile: any) => void) {
+  return onSnapshot(profileDoc(uid), (snap) => {
+    if (snap.exists()) {
+      cb(snap.data());
+    } else {
+      cb(null);
+    }
   });
 }
 

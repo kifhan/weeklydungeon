@@ -40,3 +40,9 @@ Rules enforce per-user access under `users/{uid}` and cover habits, weeks, logs,
 
 - Enable Google and Anonymous sign-in providers in Firebase Console → Authentication → Sign-in method.
 - The landing page offers both "Sign in with Google" and "Continue as Guest" (anonymous).
+
+
+craete character screen
+let user choose characteristic traits
+generate character prompt for memory and other AI features
+save character prompt to user data

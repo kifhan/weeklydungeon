@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
@@ -7,16 +6,25 @@ import { Textarea } from './ui/Textarea';
 import { Badge } from './ui/Badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/Select';
 import { Label } from './ui/Label';
-import { Plus, Calendar, BarChart3, TrendingUp, Download, Upload, Sparkles } from 'lucide-react';
+import { Plus, Calendar, BarChart3, TrendingUp, Download, Upload, Sparkles, Smile, Frown, Meh, Zap, CloudRain, Trash2 } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { defaultHabitEntries } from '../constants';
-import { HabitEntry, HabitState } from '../types';
+import { HabitEntry, Emotion } from '../types';
 import { GoogleGenAI } from '@google/genai';
-import { addHabitEntry as addHabitEntryFs, listenHabitEntries } from '../services/firestore';
+import { addHabitEntry as addHabitEntryFs, listenHabitEntries, deleteHabitEntry, listenCharacterProfile } from '../services/firestore';
 
 interface HabitTrackerProps {
     uid: string;
 }
+
+const EMOTIONS: { value: Emotion; label: string; icon: React.ReactNode; color: string }[] = [
+    { value: "Happy", label: "Happy", icon: <Smile className="w-4 h-4" />, color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
+    { value: "Calm", label: "Calm", icon: <Meh className="w-4 h-4" />, color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
+    { value: "Excited", label: "Excited", icon: <Zap className="w-4 h-4" />, color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
+    { value: "Tired", label: "Tired", icon: <CloudRain className="w-4 h-4" />, color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100" },
+    { value: "Anxious", label: "Anxious", icon: <Frown className="w-4 h-4" />, color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100" },
+    { value: "Frustrated", label: "Frustrated", icon: <Frown className="w-4 h-4" />, color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" },
+];
 
 export const HabitTracker: React.FC<HabitTrackerProps> = ({ uid }) => {
     const [habitEntries, setHabitEntries] = useLocalStorage<HabitEntry[]>('habitTrackerData', defaultHabitEntries);
@@ -24,23 +32,33 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({ uid }) => {
     const [newEntry, setNewEntry] = useState<Partial<HabitEntry>>({
         date: new Date().toISOString().split("T")[0],
         time: new Date().toTimeString().slice(0, 5),
-        state: 'Chilled', statusMemo: '', trigger: '', action: '', remarks: '',
+        emotion: 'Calm',
+        note: '',
     });
-    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [aiResponse, setAiResponse] = useState<string>('');
+    const [loadingAI, setLoadingAI] = useState(false);
     const [dateFilter, setDateFilter] = useState('');
+    const [characterPrompt, setCharacterPrompt] = useState<string>('');
 
     const addHabitEntry = async () => {
-        if (!newEntry.statusMemo || !newEntry.trigger || !newEntry.action) {
-            alert("Hold up! You need to fill in your Vibe Check, What Happened, and What You Did fields to complete this slaking entry! 😴");
+        if (!newEntry.note) {
+            alert("Please add a small note about how you're feeling!");
             return;
         }
+
+        // Generate AI response if not already present
+        let response = aiResponse;
+        if (!response) {
+            response = await generateAIResponse(newEntry.emotion as Emotion, newEntry.note);
+        }
+
         const entry: HabitEntry = {
             id: `entry-${Date.now()}`,
             date: newEntry.date || new Date().toISOString().split("T")[0],
             time: newEntry.time || new Date().toTimeString().slice(0, 5),
-            state: newEntry.state || "Chilled",
-            statusMemo: newEntry.statusMemo, trigger: newEntry.trigger, action: newEntry.action,
-            remarks: newEntry.remarks,
+            emotion: (newEntry.emotion as Emotion) || "Calm",
+            note: newEntry.note,
+            aiResponse: response,
         };
         setHabitEntries((prev) => [entry, ...prev]);
         try {
@@ -50,9 +68,25 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({ uid }) => {
         }
         setNewEntry({
             date: new Date().toISOString().split("T")[0], time: new Date().toTimeString().slice(0, 5),
-            state: 'Chilled', statusMemo: '', trigger: '', action: '', remarks: '',
+            emotion: 'Calm', note: '',
         });
+        setAiResponse('');
         setTrackerView('history');
+    };
+
+    const handleDeleteEntry = async (entryId: string) => {
+        if (!confirm('Are you sure you want to delete this entry?')) return;
+
+        // Optimistic update
+        setHabitEntries((prev) => prev.filter((e) => e.id !== entryId));
+
+        try {
+            await deleteHabitEntry(uid, entryId);
+        } catch (e) {
+            console.error('Failed to delete habit entry:', e);
+            // Revert if failed (simplified, ideally we'd re-fetch or have more robust rollback)
+            alert('Failed to delete entry from server.');
+        }
     };
 
     useEffect(() => {
@@ -60,125 +94,78 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({ uid }) => {
         const unsub = listenHabitEntries(uid, (entries) => {
             setHabitEntries((prev) => {
                 const byId = new Map<string, HabitEntry>();
-                // Merge FS entries and cached local entries, prefer FS when conflict
                 entries.forEach((e) => byId.set(e.id, e));
                 prev.forEach((e) => {
                     if (!byId.has(e.id)) byId.set(e.id, e);
                 });
-                // Keep Firestore order first
                 const ordered = [...entries, ...prev.filter((e) => !entries.find((x) => x.id === e.id))];
                 return ordered;
             });
         });
-        return () => unsub();
+        const unsubProfile = listenCharacterProfile(uid, (profile) => {
+            if (profile?.generatedPrompt) {
+                setCharacterPrompt(profile.generatedPrompt);
+            }
+        });
+        return () => {
+            unsub();
+            unsubProfile();
+        };
     }, [uid]);
-    
+
+    const generateAIResponse = async (emotion: Emotion, note: string) => {
+        try {
+            setLoadingAI(true);
+            const systemInstruction = characterPrompt
+                ? `You are acting as a specific character. ${characterPrompt}`
+                : `You are a wise and gentle Forest Spirit (a Dungeon Guide).`;
+
+            const prompt = `${systemInstruction}
+            A traveler has come to you in the Forest of Emotions.
+            
+            Traveler's Emotion: ${emotion}
+            Traveler's Note: "${note}"
+            
+            Respond to them with a short, comforting, or encouraging message (max 2 sentences). Be mystical but grounded.
+            If they are happy/excited, celebrate with them. If they are sad/anxious, offer solace.`;
+
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt
+            });
+
+            const text = result.text.trim();
+            setAiResponse(text);
+            return text;
+        } catch (error) {
+            console.error('Failed to generate AI response:', error);
+            return "The forest whispers quietly...";
+        } finally {
+            setLoadingAI(false);
+        }
+    };
+
     const getFilteredEntries = () => {
         if (!dateFilter) return habitEntries;
         return habitEntries.filter((entry) => entry.date.includes(dateFilter));
     };
 
-    const getStateFrequency = () => {
+    const getEmotionFrequency = () => {
         const frequency: Record<string, number> = {};
         habitEntries.forEach((entry) => {
-            frequency[entry.state] = (frequency[entry.state] || 0) + 1;
+            frequency[entry.emotion] = (frequency[entry.emotion] || 0) + 1;
         });
         return Object.entries(frequency).sort((a, b) => b[1] - a[1]);
     };
 
-    const getCommonTriggers = () => {
-        const triggers = habitEntries.map((entry) => entry.trigger.toLowerCase().trim()).filter(Boolean);
-        const frequency: Record<string, number> = {};
-        triggers.forEach((trigger) => { frequency[trigger] = (frequency[trigger] || 0) + 1; });
-        return Object.entries(frequency).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    };
-
-    const getCommonActions = () => {
-        const actions = habitEntries.map((entry) => entry.action.toLowerCase().trim()).filter(Boolean);
-        const frequency: Record<string, number> = {};
-        actions.forEach((action) => { frequency[action] = (frequency[action] || 0) + 1; });
-        return Object.entries(frequency).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    };
-    
-    const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-
-    const generateAISuggestions = async () => {
-        if (!newEntry.state || !newEntry.statusMemo || !newEntry.trigger) {
-            return getCommonActions().map(([action]) => action);
-        }
-
-        try {
-            setLoadingSuggestions(true);
-            
-            // Get historical patterns for context
-            const commonActions = getCommonActions().slice(0, 3).map(([action]) => action);
-            const recentEntries = habitEntries.slice(0, 5);
-            
-            const prompt = `You are a helpful assistant for a fun "Slaking Log" app where people track their daily vibes and what they do about them. 
-
-Current situation:
-- Vibe: ${newEntry.state}
-- How they're feeling: "${newEntry.statusMemo}"
-- What happened: "${newEntry.trigger}"
-
-Historical context (their common go-to moves):
-${commonActions.length > 0 ? commonActions.map(action => `- ${action}`).join('\n') : 'No historical data yet'}
-
-Recent entries for pattern context:
-${recentEntries.map(entry => `- When feeling "${entry.state}" they did: "${entry.action}"`).join('\n')}
-
-Generate 4-6 fun, actionable, and personalized suggestions for what they could do about their current situation. Keep the tone casual and playful to match the "slaking" theme. Each suggestion should be:
-1. Practical and doable
-2. Appropriate for their current vibe and trigger
-3. Fun or at least not too serious
-4. Different from each other
-
-Format as a simple list, one suggestion per line, without bullets or numbers.`;
-
-            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-            
-            const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt
-            });
-            
-            const suggestions = result.text
-                .split('\n')
-                .map(s => s.trim())
-                .filter(s => s.length > 0 && !s.startsWith('-') && !s.match(/^\d+\./))
-                .slice(0, 6);
-            
-            setAiSuggestions(suggestions);
-            return suggestions;
-        } catch (error) {
-            console.error('Failed to generate AI suggestions:', error);
-            // Fallback to historical suggestions
-            return getCommonActions().map(([action]) => action);
-        } finally {
-            setLoadingSuggestions(false);
-        }
-    };
-
-    const getSuggestedActions = () => {
-        if (aiSuggestions.length > 0) {
-            return aiSuggestions;
-        }
-        return getCommonActions().map(([action]) => action);
-    };
-
-    const selectSuggestedAction = (action: string) => {
-        setNewEntry({ ...newEntry, action });
-        setShowSuggestions(false);
-    };
-    
     const exportHabits = () => {
         const dataStr = JSON.stringify(habitEntries, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'my-slaking-adventures.json';
+        link.download = 'my-forest-journal.json';
         link.click();
         URL.revokeObjectURL(url);
     };
@@ -187,7 +174,7 @@ Format as a simple list, one suggestion per line, without bullets or numbers.`;
         const file = event.target.files?.[0];
         if (!file) return;
 
-        if (!confirm('This will merge your imported slaks with your current slaking log. Ready to combine your slaking adventures?')) {
+        if (!confirm('This will merge your imported journal with your current one. Ready?')) {
             event.target.value = '';
             return;
         }
@@ -206,12 +193,12 @@ Format as a simple list, one suggestion per line, without bullets or numbers.`;
 
                 const combinedEntries = [...importedEntries, ...habitEntries];
                 const uniqueEntries = Array.from(new Map(combinedEntries.map(entry => [entry.id, entry])).values());
-                
+
                 setHabitEntries(uniqueEntries);
-                alert('Slaking adventures imported successfully! 🎉');
+                alert('Journal imported successfully! 🌲');
             } catch (error) {
-                console.error("Failed to import slaks:", error);
-                alert('Oops! Failed to import your slaks. Please check the file format. 😕');
+                console.error("Failed to import:", error);
+                alert('Oops! Failed to import. Please check the file format.');
             } finally {
                 event.target.value = '';
             }
@@ -222,75 +209,77 @@ Format as a simple list, one suggestion per line, without bullets or numbers.`;
     return (
         <div>
             <div className="mb-6 flex gap-2">
-                <Button variant={trackerView === 'entry' ? 'default' : 'outline'} onClick={() => setTrackerView('entry')}><Plus className="w-4 h-4 mr-2" />New Slak</Button>
-                <Button variant={trackerView === 'history' ? 'default' : 'outline'} onClick={() => setTrackerView('history')}><Calendar className="w-4 h-4 mr-2" />Slak History</Button>
-                <Button variant={trackerView === 'analytics' ? 'default' : 'outline'} onClick={() => setTrackerView('analytics')}><BarChart3 className="w-4 h-4 mr-2" />Slak Stats</Button>
+                <Button variant={trackerView === 'entry' ? 'default' : 'outline'} onClick={() => setTrackerView('entry')}><Plus className="w-4 h-4 mr-2" />New Entry</Button>
+                <Button variant={trackerView === 'history' ? 'default' : 'outline'} onClick={() => setTrackerView('history')}><Calendar className="w-4 h-4 mr-2" />Journal</Button>
+                <Button variant={trackerView === 'analytics' ? 'default' : 'outline'} onClick={() => setTrackerView('analytics')}><BarChart3 className="w-4 h-4 mr-2" />Patterns</Button>
             </div>
 
             {trackerView === 'entry' && (
                 <Card>
-                    <CardHeader><CardTitle>� New Slak Entry</CardTitle><CardDescription>Time to log your latest slaking adventure!</CardDescription></CardHeader>
-                    <CardContent className="space-y-4">
-                         <div className="grid grid-cols-2 gap-4">
+                    <CardHeader><CardTitle>🌲 Forest Journal</CardTitle><CardDescription>How is your spirit today?</CardDescription></CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
                             <div><Label htmlFor="entry-date">Date</Label><Input id="entry-date" type="date" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} /></div>
                             <div><Label htmlFor="entry-time">Time</Label><Input id="entry-time" type="time" value={newEntry.time} onChange={(e) => setNewEntry({ ...newEntry, time: e.target.value })} /></div>
                         </div>
+
                         <div>
-                            <Label htmlFor="entry-state">Current Vibe</Label>
-                            <Select value={newEntry.state} onValueChange={(value) => setNewEntry({ ...newEntry, state: value as HabitState })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Chilled">😎 Chilled</SelectItem><SelectItem value="Vibing">🎵 Vibing</SelectItem><SelectItem value="Scattered">🤯 Scattered</SelectItem>
-                                    <SelectItem value="Sleepy">😴 Sleepy</SelectItem><SelectItem value="Energized">⚡ Energized</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div><Label htmlFor="entry-status">Vibe Check *</Label><Textarea id="entry-status" placeholder="What's your current mood and energy level? Are you thriving or just surviving?" value={newEntry.statusMemo} onChange={(e) => setNewEntry({ ...newEntry, statusMemo: e.target.value })} /></div>
-                        <div><Label htmlFor="entry-trigger">What Happened? *</Label><Textarea id="entry-trigger" placeholder="What made you feel this way? Did someone steal your snacks? Too much coffee? Monday happened?" value={newEntry.trigger} onChange={(e) => setNewEntry({ ...newEntry, trigger: e.target.value })} /></div>
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <Label htmlFor="entry-action">What You Did *</Label>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={generateAISuggestions}
-                                    disabled={loadingSuggestions || !newEntry.state || !newEntry.statusMemo || !newEntry.trigger}
-                                    className="text-xs"
-                                >
-                                    {loadingSuggestions ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-500 mr-1"></div>
-                                            Thinking...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-3 h-3 mr-1" />
-                                            AI Ideas
-                                        </>
-                                    )}
-                                </Button>
+                            <Label className="mb-2 block">Current Emotion</Label>
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                                {EMOTIONS.map((emo) => (
+                                    <button
+                                        key={emo.value}
+                                        type="button"
+                                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${newEntry.emotion === emo.value ? `ring-2 ring-offset-2 ring-primary ${emo.color}` : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        onClick={() => setNewEntry({ ...newEntry, emotion: emo.value })}
+                                    >
+                                        {emo.icon}
+                                        <span className="text-xs mt-1 font-medium">{emo.label}</span>
+                                    </button>
+                                ))}
                             </div>
-                            <div className="relative">
-                                <Textarea id="entry-action" placeholder="What did you do about it? Nap? Snack? Procrastinate productively?" value={newEntry.action} onChange={(e) => setNewEntry({ ...newEntry, action: e.target.value })} onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} />
-                                {showSuggestions && getSuggestedActions().length > 0 && (
-                                    <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white dark:bg-gray-800 border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                                        <div className="p-2 text-xs text-gray-500 border-b">
-                                            {aiSuggestions.length > 0 ? (
-                                                <><Sparkles className="w-3 h-3 inline mr-1" />AI-powered suggestions:</>
-                                            ) : (
-                                                "🎯 Your go-to slaking moves:"
-                                            )}
-                                        </div>
-                                        {getSuggestedActions().map((action, index) => (
-                                            <button key={index} className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" onClick={() => selectSuggestedAction(action)}>{action}</button>
-                                        ))}
+                        </div>
+
+                        <div>
+                            <Label htmlFor="entry-note">Your Thoughts</Label>
+                            <Textarea
+                                id="entry-note"
+                                placeholder="What's on your mind? The forest listens..."
+                                value={newEntry.note}
+                                onChange={(e) => setNewEntry({ ...newEntry, note: e.target.value })}
+                                className="min-h-[100px]"
+                            />
+                        </div>
+
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => generateAIResponse(newEntry.emotion as Emotion, newEntry.note || "")}
+                                disabled={loadingAI || !newEntry.note}
+                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            >
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Ask the Forest Spirit
+                            </Button>
+                        </div>
+
+                        {aiResponse && (
+                            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-100 dark:border-purple-800">
+                                <div className="flex items-start gap-3">
+                                    <div className="bg-purple-100 dark:bg-purple-800 p-2 rounded-full">
+                                        <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-300" />
                                     </div>
-                                )}
+                                    <div>
+                                        <p className="text-sm font-medium text-purple-900 dark:text-purple-100">Forest Spirit says:</p>
+                                        <p className="text-sm text-purple-800 dark:text-purple-200 mt-1 italic">"{aiResponse}"</p>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div><Label htmlFor="entry-remarks">Extra Thoughts</Label><Textarea id="entry-remarks" placeholder="Any other random thoughts or observations? (totally optional)" value={newEntry.remarks} onChange={(e) => setNewEntry({ ...newEntry, remarks: e.target.value })} /></div>
-                        <Button onClick={addHabitEntry} className="w-full">Log This Slak! 🎯</Button>
+                        )}
+
+                        <Button onClick={addHabitEntry} className="w-full" disabled={!newEntry.note}>Log Entry 🍃</Button>
                     </CardContent>
                 </Card>
             )}
@@ -298,70 +287,85 @@ Format as a simple list, one suggestion per line, without bullets or numbers.`;
             {trackerView === 'history' && (
                 <div>
                     <div className="mb-4 flex flex-wrap gap-4 justify-between items-center">
-                        <Input placeholder="Find your slaks by date (YYYY-MM-DD)" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="max-w-xs" />
-                         <div className="flex gap-2">
-                             <input type="file" id="import-habits-input" accept=".json" onChange={importHabits} className="hidden" />
+                        <Input placeholder="Filter by date..." value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="max-w-xs" />
+                        <div className="flex gap-2">
+                            <input type="file" id="import-habits-input" accept=".json" onChange={importHabits} className="hidden" />
                             <Button variant="outline" onClick={() => document.getElementById('import-habits-input')?.click()}>
-                                <Upload className="w-4 h-4 mr-2" />Import Slaks
+                                <Upload className="w-4 h-4 mr-2" />Import
                             </Button>
                             <Button variant="outline" onClick={exportHabits}>
-                                <Download className="w-4 h-4 mr-2" />Export Slaks
+                                <Download className="w-4 h-4 mr-2" />Export
                             </Button>
                         </div>
                     </div>
                     <div className="space-y-4">
-                        {getFilteredEntries().map((entry) => (
-                            <Card key={entry.id}>
-                                <CardContent className="pt-4">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex gap-2 flex-wrap">
-                                            <Badge variant="outline">{entry.date}</Badge><Badge variant="outline">{entry.time}</Badge>
-                                            <Badge variant={entry.state === "Chilled" || entry.state === "Energized" ? "default" : entry.state === "Vibing" ? "secondary" : "destructive"}>{entry.state}</Badge>
+                        {getFilteredEntries().map((entry) => {
+                            const emo = EMOTIONS.find(e => e.value === entry.emotion) || EMOTIONS[1];
+                            return (
+                                <Card key={entry.id}>
+                                    <CardContent className="pt-4">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex gap-2 items-center">
+                                                <Badge variant="outline">{entry.date}</Badge>
+                                                <Badge variant="outline">{entry.time}</Badge>
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${emo.color}`}>
+                                                    {emo.icon}
+                                                    {entry.emotion}
+                                                </span>
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                                onClick={() => handleDeleteEntry(entry.id)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2 text-sm">
-                                        <div><strong>Vibe:</strong> {entry.statusMemo}</div>
-                                        <div><strong>What Happened:</strong> {entry.trigger}</div>
-                                        <div><strong>What You Did:</strong> {entry.action}</div>
-                                        {entry.remarks && <div><strong>Extra Thoughts:</strong> {entry.remarks}</div>}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                        <div className="space-y-3 text-sm">
+                                            <div className="text-gray-700 dark:text-gray-300">{entry.note}</div>
+                                            {entry.aiResponse && (
+                                                <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-md border-l-4 border-purple-400">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Forest Spirit</p>
+                                                    <p className="italic text-gray-600 dark:text-gray-300">"{entry.aiResponse}"</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
                     </div>
                 </div>
-            )}
-            
-            {trackerView === 'analytics' && (
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                  <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5" />Your Vibe Patterns</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {getStateFrequency().map(([state, count]) => (
-                        <div key={state} className="flex justify-between items-center">
-                          <Badge variant={state === "Chilled" || state === "Energized" ? "default" : state === "Vibing" ? "secondary" : "destructive"}>{state}</Badge>
-                          <span className="font-semibold">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle>💥 What Sets You Off</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">{getCommonTriggers().map(([trigger, count], index) => (<div key={index} className="flex justify-between items-center text-sm"><span className="flex-1 truncate">{trigger}</span><Badge variant="outline">{count}</Badge></div>))}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle>🎯 Your Go-To Moves</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">{getCommonActions().map(([action, count], index) => (<div key={index} className="flex justify-between items-center text-sm"><span className="flex-1 truncate">{action}</span><Badge variant="outline">{count}</Badge></div>))}</div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
+            )
+            }
 
-        </div>
+            {
+                trackerView === 'analytics' && (
+                    <div className="grid gap-6 md:grid-cols-1">
+                        <Card>
+                            <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5" />Emotion Patterns</CardTitle></CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    {getEmotionFrequency().map(([emotion, count]) => {
+                                        const emo = EMOTIONS.find(e => e.value === emotion) || EMOTIONS[1];
+                                        return (
+                                            <div key={emotion} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`p-1 rounded ${emo.color}`}>{emo.icon}</div>
+                                                    <span className="font-medium">{emotion}</span>
+                                                </div>
+                                                <span className="font-bold text-lg">{count}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )
+            }
+
+        </div >
     );
 };

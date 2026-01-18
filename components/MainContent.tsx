@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/Tabs';
-import { DungeonMap } from './DungeonMap';
+import { DailyQuestBoard } from './DailyQuestBoard';
 import { HabitTracker } from './HabitTracker';
-import { MapPin, Coffee } from 'lucide-react';
+import { ForestVisualizer } from './ForestVisualizer';
+import { CharacterScreen } from './CharacterScreen';
+import { MapPin, BookOpen, User as UserIcon } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { migrateLocalIfNeeded, getWeekKey } from '../services/firestore';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { WeekData, DungeonLog, HabitEntry } from '../types';
+import { WeekData, DungeonLog, HabitEntry, Tree } from '../types';
 
 interface MainContentProps {
   user: User;
 }
 
 export function MainContent({ user }: MainContentProps) {
-  const [mainTab, setMainTab] = useState<'dungeon' | 'tracker'>('dungeon');
+  const [mainTab, setMainTab] = useState<'quests' | 'journal' | 'character'>('quests');
 
   // One-time migration: if Firestore is empty, push local cached data
   const [weekData] = useLocalStorage<WeekData>('dungeonMapData', {} as any);
@@ -32,35 +34,63 @@ export function MainContent({ user }: MainContentProps) {
           logs: dungeonLogs?.length ? dungeonLogs : undefined,
         });
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn('Local migration skipped/failed:', e);
       }
     };
     run();
-    // run only once at mount for current user
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
+  // Derive trees from logs and habits
+  // For now, every completed quest (log) is a tree, and every habit entry is a shrub/flower.
+  const trees: Tree[] = [
+    ...(dungeonLogs || []).map((log, i) => ({
+      id: `tree-log-${log.id}`,
+      type: i % 3 === 0 ? 'pine' : i % 3 === 1 ? 'oak' : 'cherry',
+      stage: 'mature',
+      plantedAt: log.completedAt,
+      linkedQuestId: log.blockId
+    } as Tree)),
+    ...(habitEntries || []).map((entry, i) => ({
+      id: `tree-habit-${entry.id}`,
+      type: 'shrub',
+      stage: 'sprout',
+      plantedAt: entry.date + 'T' + entry.time,
+      linkedHabitId: entry.id
+    } as Tree))
+  ].sort((a, b) => new Date(a.plantedAt).getTime() - new Date(b.plantedAt).getTime());
+
   return (
-    <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'dungeon' | 'tracker')} className="mb-6">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="dungeon" className="flex items-center gap-2">
-          <MapPin className="w-4 h-4" />
-          Weekly Dungeon Map
-        </TabsTrigger>
-        <TabsTrigger value="tracker" className="flex items-center gap-2">
-          <Coffee className="w-4 h-4" />
-          Slaking Log
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-8">
+      <ForestVisualizer trees={trees} />
 
-      <TabsContent value="dungeon">
-        <DungeonMap uid={user.uid} />
-      </TabsContent>
+      <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'quests' | 'journal' | 'character')} className="mb-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="quests" className="flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            Daily Quests
+          </TabsTrigger>
+          <TabsTrigger value="journal" className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4" />
+            Forest Journal
+          </TabsTrigger>
+          <TabsTrigger value="character" className="flex items-center gap-2">
+            <UserIcon className="w-4 h-4" />
+            Character
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="tracker">
-        <HabitTracker uid={user.uid} />
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="quests">
+          <DailyQuestBoard uid={user.uid} />
+        </TabsContent>
+
+        <TabsContent value="journal">
+          <HabitTracker uid={user.uid} />
+        </TabsContent>
+
+        <TabsContent value="character">
+          <CharacterScreen uid={user.uid} />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
