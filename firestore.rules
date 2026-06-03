@@ -9,10 +9,158 @@ service cloud.firestore {
       return name in request.resource.data && request.resource.data[name] is string && request.resource.data[name].size() <= maxLen;
     }
 
+    function isOptionalStringField(name, maxLen) {
+      return !(name in request.resource.data) || request.resource.data[name] == null ||
+        (request.resource.data[name] is string && request.resource.data[name].size() <= maxLen);
+    }
+
+    function isOptionalTimestampField(name) {
+      return !(name in request.resource.data) || request.resource.data[name] == null ||
+        request.resource.data[name] is timestamp;
+    }
+
+    function isOptionalNumberField(name, minValue, maxValue) {
+      return !(name in request.resource.data) ||
+        (request.resource.data[name] is number &&
+          request.resource.data[name] >= minValue &&
+          request.resource.data[name] <= maxValue);
+    }
+
+    function isOptionalBoolField(name) {
+      return !(name in request.resource.data) || request.resource.data[name] is bool;
+    }
+
+    function isOptionalEnumField(name, values) {
+      return !(name in request.resource.data) ||
+        (request.resource.data[name] is string && request.resource.data[name] in values);
+    }
+
+    function isOptionalStringListField(name, maxItems) {
+      return !(name in request.resource.data) ||
+        (request.resource.data[name] is list && request.resource.data[name].size() <= maxItems);
+    }
+
+    function hasOnlyFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function validQuest() {
+      return hasOnlyFields([
+          'id', 'title', 'note', 'weekKey', 'day', 'status', 'difficulty', 'reward',
+          'sortOrder', 'createdAt', 'updatedAt', 'completedAt'
+        ]) &&
+        hasRequiredFields(['id', 'title', 'weekKey', 'day', 'status', 'difficulty', 'sortOrder']) &&
+        isStringField('id', 128) &&
+        isStringField('title', 160) &&
+        request.resource.data.title.size() > 0 &&
+        isOptionalStringField('note', 2000) &&
+        isStringField('weekKey', 20) &&
+        request.resource.data.day in [
+          'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+        ] &&
+        request.resource.data.status in ['planned', 'active', 'complete'] &&
+        request.resource.data.difficulty in ['calm', 'standard', 'boss'] &&
+        isOptionalStringField('reward', 200) &&
+        request.resource.data.sortOrder is number &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt') &&
+        isOptionalTimestampField('completedAt');
+    }
+
+    function validHabit() {
+      return hasOnlyFields(['id', 'name', 'target', 'description', 'cadence', 'status', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['id', 'name', 'target', 'cadence', 'status']) &&
+        isStringField('id', 128) &&
+        isStringField('name', 160) &&
+        request.resource.data.name.size() > 0 &&
+        isStringField('target', 160) &&
+        isOptionalStringField('description', 1000) &&
+        request.resource.data.cadence in ['daily', 'weekly'] &&
+        request.resource.data.status in ['active', 'archived'] &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validHabitLog() {
+      return hasOnlyFields(['id', 'habitId', 'date', 'checked', 'note', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['id', 'habitId', 'date', 'checked']) &&
+        isStringField('id', 180) &&
+        isStringField('habitId', 128) &&
+        isStringField('date', 20) &&
+        request.resource.data.checked is bool &&
+        isOptionalStringField('note', 1000) &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validReflection() {
+      return hasOnlyFields([
+          'id', 'question', 'source', 'status', 'deliveryId', 'answerId',
+          'dueAt', 'answeredAt', 'createdAt', 'updatedAt'
+        ]) &&
+        hasRequiredFields(['id', 'question', 'source', 'status']) &&
+        isStringField('id', 128) &&
+        isStringField('question', 2000) &&
+        request.resource.data.question.size() > 0 &&
+        request.resource.data.source in ['manual', 'meta', 'scheduled'] &&
+        request.resource.data.status in ['queued', 'answered', 'archived'] &&
+        isOptionalStringField('deliveryId', 128) &&
+        isOptionalStringField('answerId', 128) &&
+        isOptionalTimestampField('dueAt') &&
+        isOptionalTimestampField('answeredAt') &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validReflectionAnswer() {
+      return hasOnlyFields([
+          'id', 'reflectionId', 'deliveryId', 'question', 'answer', 'answeredAt',
+          'createdAt', 'updatedAt'
+        ]) &&
+        hasRequiredFields(['id', 'question', 'answer', 'answeredAt']) &&
+        isStringField('id', 128) &&
+        isOptionalStringField('reflectionId', 128) &&
+        isOptionalStringField('deliveryId', 128) &&
+        isStringField('question', 2000) &&
+        isStringField('answer', 10000) &&
+        isStringField('answeredAt', 40) &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validProfile() {
+      return hasOnlyFields([
+          'timezone', 'notificationChannel', 'remindersEnabled',
+          'guideName', 'guideArchetype', 'guideTraits', 'guideTone',
+          'guidePrompt', 'adventureIntensity', 'updatedAt'
+        ]) &&
+        isOptionalStringField('timezone', 80) &&
+        isOptionalEnumField('notificationChannel', ['in-app', 'push', 'email']) &&
+        isOptionalBoolField('remindersEnabled') &&
+        isOptionalStringField('guideName', 120) &&
+        isOptionalEnumField('guideArchetype', ['Guide', 'Strategist', 'Scout', 'Guardian']) &&
+        isOptionalStringListField('guideTraits', 8) &&
+        isOptionalStringField('guideTone', 500) &&
+        isOptionalStringField('guidePrompt', 4000) &&
+        isOptionalNumberField('adventureIntensity', 0, 100) &&
+        isOptionalTimestampField('updatedAt');
+    }
+
     // Per-user document tree
     match /users/{uid} {
       allow read: if isAuthed(uid);
       allow write: if isAuthed(uid);
+
+      // Weekly Dungeon V2
+      match /quests/{questId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validQuest();
+        allow delete: if isAuthed(uid);
+      }
 
       // Boards (Kanban)
       match /boards/{boardId} {
@@ -28,15 +176,44 @@ service cloud.firestore {
       // Habits
       match /habits/{habitId} {
         allow read: if isAuthed(uid);
-        allow create, update: if isAuthed(uid) &&
-          isStringField('id', 200) &&
-          isStringField('date', 20) &&
-          isStringField('time', 20) &&
-          isStringField('state', 40) &&
-          isStringField('statusMemo', 2000) &&
-          isStringField('trigger', 2000) &&
-          isStringField('action', 2000);
+        allow create, update: if isAuthed(uid) && validHabit();
         allow delete: if isAuthed(uid);
+      }
+
+      match /habitLogs/{logId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validHabitLog();
+        allow delete: if isAuthed(uid);
+      }
+
+      match /reflections/{reflectionId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validReflection();
+        allow delete: if isAuthed(uid);
+      }
+
+      match /reflectionSchedules/{scheduleId} {
+        allow read: if isAuthed(uid);
+        allow create, update, delete: if false;
+      }
+
+      match /reflectionDeliveries/{deliveryId} {
+        allow read: if isAuthed(uid);
+        allow update: if isAuthed(uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          request.resource.data.status == 'acked';
+        allow create, delete: if false;
+      }
+
+      match /reflectionAnswers/{answerId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validReflectionAnswer();
+        allow delete: if false;
+      }
+
+      match /memoryContexts/{contextId} {
+        allow read: if isAuthed(uid);
+        allow create, update, delete: if false;
       }
 
       // Weeks
@@ -90,10 +267,20 @@ service cloud.firestore {
       }
 
       // Settings (Character Profile)
+      match /settings/profile {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validProfile();
+        allow delete: if false;
+      }
+
+      match /settings/migration {
+        allow read: if isAuthed(uid);
+        allow create, update, delete: if false;
+      }
+
       match /settings/{settingId} {
         allow read: if isAuthed(uid);
-        allow create, update: if isAuthed(uid);
-        allow delete: if isAuthed(uid);
+        allow create, update, delete: if false;
       }
     }
 
