@@ -8,6 +8,7 @@ import { CommandCenterPage } from '@/pages/CommandCenterPage';
 import { QuestsPage } from '@/pages/QuestsPage';
 import { JournalPage } from '@/pages/JournalPage';
 import { CharacterPage } from '@/pages/CharacterPage';
+import { SettingsPage } from '@/pages/SettingsPage';
 import { LifePage } from '@/pages/LifePage';
 import { ReflectionAnswerPage } from '@/pages/ReflectionAnswerPage';
 
@@ -62,6 +63,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         <Route path="habits" element={uid ? <JournalPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="journal" element={<Navigate to="/habits" replace />} />
         <Route path="character" element={uid ? <CharacterPage uid={uid} /> : <Navigate to="/login" replace />} />
+        <Route path="settings" element={uid ? <SettingsPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="reflections" element={uid ? <LifePage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="life" element={<Navigate to="/reflections" replace />} />
         <Route

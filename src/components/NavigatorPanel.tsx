@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { BookOpen, Compass, MapPin, Sparkles, User as UserIcon } from 'lucide-react';
+import { BookOpen, Compass, MapPin, Settings, Sparkles, User as UserIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 
 type NavItem = {
@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/habits', label: 'Habits', Icon: BookOpen },
   { to: '/reflections', label: 'Reflections', Icon: Sparkles },
   { to: '/character', label: 'Character', Icon: UserIcon },
+  { to: '/settings', label: 'Settings', Icon: Settings },
 ];
 
 export function NavigatorPanel() {
