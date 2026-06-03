@@ -9,7 +9,8 @@
     "prebuild": "node scripts/generate-firebase-config.mjs",
     "build": "vite build",
     "prepreview": "node scripts/generate-firebase-config.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cleanup:legacy": "node scripts/cleanup-legacy-firestore.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
