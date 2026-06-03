@@ -9,9 +9,7 @@ import { QuestsPage } from '@/pages/QuestsPage';
 import { JournalPage } from '@/pages/JournalPage';
 import { CharacterPage } from '@/pages/CharacterPage';
 import { LifePage } from '@/pages/LifePage';
-import { LifeAnswerDeliveryPage } from '@/pages/LifeAnswerDeliveryPage';
-import { LifeAnswerQuestionPage } from '@/pages/LifeAnswerQuestionPage';
-import { LifeAnswerDetailPage } from '@/pages/LifeAnswerDetailPage';
+import { ReflectionAnswerPage } from '@/pages/ReflectionAnswerPage';
 
 interface AppRoutesProps {
   user: FirebaseUser | null | undefined;
@@ -64,29 +62,21 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         <Route path="habits" element={uid ? <JournalPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="journal" element={<Navigate to="/habits" replace />} />
         <Route path="character" element={uid ? <CharacterPage uid={uid} /> : <Navigate to="/login" replace />} />
-        <Route path="reflections" element={<Navigate to="/reflections/inbox" replace />} />
-        <Route path="life" element={<Navigate to="/reflections/inbox" replace />} />
+        <Route path="reflections" element={uid ? <LifePage uid={uid} /> : <Navigate to="/login" replace />} />
+        <Route path="life" element={<Navigate to="/reflections" replace />} />
         <Route
           path="life/answer/delivery/:deliveryId"
-          element={<Navigate to="/reflections/inbox" replace />}
+          element={<Navigate to="/reflections" replace />}
         />
         <Route
           path="life/answer/question/:questionId"
-          element={<Navigate to="/reflections/questions" replace />}
+          element={<Navigate to="/reflections" replace />}
         />
-        <Route path="life/answers/:answerId" element={<Navigate to="/reflections/history" replace />} />
-        <Route path="life/:tab" element={<Navigate to="/reflections/inbox" replace />} />
+        <Route path="life/answers/:answerId" element={<Navigate to="/reflections" replace />} />
+        <Route path="life/:tab" element={<Navigate to="/reflections" replace />} />
         <Route
-          path="reflections/answer/delivery/:deliveryId"
-          element={uid ? <LifeAnswerDeliveryPage uid={uid} /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="reflections/answer/question/:questionId"
-          element={uid ? <LifeAnswerQuestionPage uid={uid} /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="reflections/answers/:answerId"
-          element={uid ? <LifeAnswerDetailPage uid={uid} /> : <Navigate to="/login" replace />}
+          path="reflections/answer/:deliveryId"
+          element={uid ? <ReflectionAnswerPage uid={uid} /> : <Navigate to="/login" replace />}
         />
         <Route path="reflections/:tab" element={uid ? <LifePage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
