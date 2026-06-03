@@ -23,7 +23,7 @@ export const LifeAnswerQuestionPage: React.FC<LifeAnswerQuestionPageProps> = ({ 
   useEffect(() => {
     if (questionId && questions.length > 0 && !question) {
       // Question not found
-      navigate('/life/questions', { replace: true });
+      navigate('/reflections/questions', { replace: true });
     }
   }, [questionId, questions, question, navigate]);
 
@@ -40,7 +40,7 @@ export const LifeAnswerQuestionPage: React.FC<LifeAnswerQuestionPageProps> = ({ 
         answeredAt: new Date().toISOString(),
       };
       await addAnswer(uid, answer);
-      navigate('/life/history');
+      navigate('/reflections/history');
     } catch (error) {
       console.error('Failed to submit answer:', error);
     } finally {
@@ -54,7 +54,7 @@ export const LifeAnswerQuestionPage: React.FC<LifeAnswerQuestionPageProps> = ({ 
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
             <p className="text-sm text-gray-500">Question not found.</p>
-            <Button onClick={() => navigate('/life/questions')} variant="outline">
+            <Button onClick={() => navigate('/reflections/questions')} variant="outline">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Questions
             </Button>
@@ -72,7 +72,7 @@ export const LifeAnswerQuestionPage: React.FC<LifeAnswerQuestionPageProps> = ({ 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/life/questions')}
+              onClick={() => navigate('/reflections/questions')}
               className="mr-2"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -107,7 +107,7 @@ export const LifeAnswerQuestionPage: React.FC<LifeAnswerQuestionPageProps> = ({ 
             </Button>
             <Button
               variant="outline"
-              onClick={() => navigate('/life/questions')}
+              onClick={() => navigate('/reflections/questions')}
               disabled={isSubmitting}
             >
               Cancel

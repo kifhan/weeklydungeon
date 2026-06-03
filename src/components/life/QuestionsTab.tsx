@@ -99,7 +99,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ uid, questions }) =>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate(`/life/answer/question/${question.id}`)}
+                  onClick={() => navigate(`/reflections/answer/question/${question.id}`)}
                   className="ml-auto"
                 >
                   <MessageSquare className="w-4 h-4 mr-2" />

@@ -41,7 +41,7 @@ export const LifeQuestionHub: React.FC<LifeQuestionHubProps> = ({ uid }) => {
 
   useEffect(() => {
     if (!tab || !LIFE_TABS.includes(tab as typeof LIFE_TABS[number])) {
-      navigate('/life/inbox', { replace: true });
+      navigate('/reflections/inbox', { replace: true });
     }
   }, [navigate, tab]);
 
@@ -54,11 +54,11 @@ export const LifeQuestionHub: React.FC<LifeQuestionHubProps> = ({ uid }) => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-blue-500" />
-          Life Question Bot
+          Reflections
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={(value) => navigate(`/life/${value}`)}>
+        <Tabs value={activeTab} onValueChange={(value) => navigate(`/reflections/${value}`)}>
           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="inbox">Inbox</TabsTrigger>
             <TabsTrigger value="questions">Questions</TabsTrigger>

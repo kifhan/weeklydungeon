@@ -30,7 +30,7 @@ export const LifeAnswerDeliveryPage: React.FC<LifeAnswerDeliveryPageProps> = ({ 
   useEffect(() => {
     if (deliveryId && deliveries.length > 0 && !delivery) {
       // Delivery not found or already answered
-      navigate('/life/inbox', { replace: true });
+      navigate('/reflections/inbox', { replace: true });
     }
   }, [deliveryId, deliveries, delivery, navigate]);
 
@@ -48,7 +48,7 @@ export const LifeAnswerDeliveryPage: React.FC<LifeAnswerDeliveryPageProps> = ({ 
       };
       await addAnswer(uid, answer);
       await updateDelivery(uid, delivery.id, { status: 'ACKED' });
-      navigate('/life/history');
+      navigate('/reflections/history');
     } catch (error) {
       console.error('Failed to submit answer:', error);
     } finally {
@@ -62,7 +62,7 @@ export const LifeAnswerDeliveryPage: React.FC<LifeAnswerDeliveryPageProps> = ({ 
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
             <p className="text-sm text-gray-500">Delivery not found or already answered.</p>
-            <Button onClick={() => navigate('/life/inbox')} variant="outline">
+            <Button onClick={() => navigate('/reflections/inbox')} variant="outline">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Inbox
             </Button>
@@ -80,7 +80,7 @@ export const LifeAnswerDeliveryPage: React.FC<LifeAnswerDeliveryPageProps> = ({ 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/life/inbox')}
+              onClick={() => navigate('/reflections/inbox')}
               className="mr-2"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -116,7 +116,7 @@ export const LifeAnswerDeliveryPage: React.FC<LifeAnswerDeliveryPageProps> = ({ 
             </Button>
             <Button
               variant="outline"
-              onClick={() => navigate('/life/inbox')}
+              onClick={() => navigate('/reflections/inbox')}
               disabled={isSubmitting}
             >
               Cancel

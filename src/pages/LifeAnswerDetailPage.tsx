@@ -26,7 +26,7 @@ export const LifeAnswerDetailPage: React.FC<LifeAnswerDetailPageProps> = ({ uid 
   useEffect(() => {
     if (answerId && answers.length > 0 && !answer) {
       // Answer not found
-      navigate('/life/history', { replace: true });
+      navigate('/reflections/history', { replace: true });
     }
   }, [answerId, answers, answer, navigate]);
 
@@ -36,7 +36,7 @@ export const LifeAnswerDetailPage: React.FC<LifeAnswerDetailPageProps> = ({ uid 
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
             <p className="text-sm text-gray-500">Answer not found.</p>
-            <Button onClick={() => navigate('/life/history')} variant="outline">
+            <Button onClick={() => navigate('/reflections/history')} variant="outline">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to History
             </Button>
@@ -54,7 +54,7 @@ export const LifeAnswerDetailPage: React.FC<LifeAnswerDetailPageProps> = ({ uid 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/life/history')}
+              onClick={() => navigate('/reflections/history')}
               className="mr-2"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -86,7 +86,7 @@ export const LifeAnswerDetailPage: React.FC<LifeAnswerDetailPageProps> = ({ uid 
           <div>
             <Button
               variant="outline"
-              onClick={() => navigate('/life/history')}
+              onClick={() => navigate('/reflections/history')}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to History

@@ -33,7 +33,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ answers }) => {
           <div
             key={answer.id}
             className="rounded-lg border p-4 space-y-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-            onClick={() => navigate(`/life/answers/${answer.id}`)}
+            onClick={() => navigate(`/reflections/answers/${answer.id}`)}
           >
             <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{answer.sourceQuestionText}</p>
             <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{answer.answerContent}</p>
@@ -44,7 +44,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ answers }) => {
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/life/answers/${answer.id}`);
+                  navigate(`/reflections/answers/${answer.id}`);
                 }}
               >
                 <Eye className="w-4 h-4 mr-2" />

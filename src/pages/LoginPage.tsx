@@ -16,7 +16,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ user, onSignIn, onSignInAn
   const navigate = useNavigate();
   const from = (location.state as any)?.from;
   const fromPath =
-    (from?.pathname || '') + (from?.search || '') + (from?.hash || '') || '/quests';
+    (from?.pathname || '') + (from?.search || '') + (from?.hash || '') || '/';
 
   useEffect(() => {
     if (!user) return;

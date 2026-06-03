@@ -142,7 +142,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => navigate(`/life/answer/delivery/${delivery.id}`)}
+                  onClick={() => navigate(`/reflections/answer/delivery/${delivery.id}`)}
                   disabled={answerBusy[delivery.id]}
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
