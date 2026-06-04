@@ -46,6 +46,29 @@ function readDoc<T extends { id: string }>(snapshot: QueryDocumentSnapshot<Docum
   return { id: snapshot.id, ...snapshot.data() } as T;
 }
 
+function timestampMillis(value: unknown) {
+  if (!value) return 0;
+  if (typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+function sortQuests(quests: Quest[]) {
+  return [...quests].sort((a, b) => {
+    const sortDelta = (a.sortOrder || 0) - (b.sortOrder || 0);
+    if (sortDelta !== 0) return sortDelta;
+    const createdDelta = timestampMillis(a.createdAt) - timestampMillis(b.createdAt);
+    if (createdDelta !== 0) return createdDelta;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export const dungeonPaths = {
   user: (uid: string) => doc(db, 'users', uid),
   quests: (uid: string) => collection(db, 'users', uid, 'quests'),
@@ -69,8 +92,7 @@ export const dungeonPaths = {
 };
 
 export function listenQuests(uid: string, onData: Listener<Quest>, onError?: ListenerError): Unsubscribe {
-  const q = query(dungeonPaths.quests(uid), orderBy('sortOrder', 'asc'), orderBy('createdAt', 'asc'), limit(500));
-  return onSnapshot(q, (snapshot) => onData(snapshot.docs.map(readDoc<Quest>)), onError);
+  return onSnapshot(dungeonPaths.quests(uid), (snapshot) => onData(sortQuests(snapshot.docs.map(readDoc<Quest>))), onError);
 }
 
 export function listenCurrentWeekQuests(
@@ -79,14 +101,8 @@ export function listenCurrentWeekQuests(
   onError?: ListenerError,
   weekKey = currentWeekKey()
 ): Unsubscribe {
-  const q = query(
-    dungeonPaths.quests(uid),
-    where('weekKey', '==', weekKey),
-    orderBy('sortOrder', 'asc'),
-    orderBy('createdAt', 'asc'),
-    limit(200)
-  );
-  return onSnapshot(q, (snapshot) => onData(snapshot.docs.map(readDoc<Quest>)), onError);
+  const q = query(dungeonPaths.quests(uid), where('weekKey', '==', weekKey));
+  return onSnapshot(q, (snapshot) => onData(sortQuests(snapshot.docs.map(readDoc<Quest>))), onError);
 }
 
 export function listenHabits(uid: string, onData: Listener<Habit>, onError?: ListenerError): Unsubscribe {
