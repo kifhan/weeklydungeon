@@ -107,6 +107,8 @@ export interface DungeonProfile extends CharacterProfile {
   timezone: string;
   notificationChannel: NotificationChannel;
   remindersEnabled: boolean;
+  walkthroughCompletedStepIds: string[];
+  walkthroughPromptDismissed: boolean;
 }
 
 export interface DungeonData {
@@ -134,6 +136,8 @@ export const defaultDungeonProfile: DungeonProfile = {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul',
   notificationChannel: 'in-app',
   remindersEnabled: true,
+  walkthroughCompletedStepIds: [],
+  walkthroughPromptDismissed: false,
   guideName: 'Dungeon Guide',
   guideArchetype: 'Strategist',
   guideTraits: ['Grounded', 'Direct', 'Warm'],

@@ -1,4 +1,5 @@
 import React, { FormEvent, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Archive, CheckCircle2, Flame, Plus, Send, Sparkles, Swords } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +10,7 @@ import { Select, SelectItem } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useDungeonActions } from '@/weekly-dungeon/hooks/useDungeonActions';
 import { useDungeonData } from '@/weekly-dungeon/hooks/useDungeonData';
+import { walkthroughSteps } from '@/pages/WalkthroughPage';
 import {
   buildCharacterPrompt,
   currentQuestDay,
@@ -44,6 +46,12 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ uid }) => 
   const progress = getQuestProgress(dungeon.quests);
   const activeQuests = dungeon.quests.filter((quest) => quest.status !== 'complete');
   const queuedReflections = dungeon.reflections.filter((reflection) => reflection.status === 'queued');
+  const walkthroughCompletedStepIds = dungeon.profile.walkthroughCompletedStepIds || [];
+  const walkthroughCompletedCount = walkthroughSteps.filter((step) =>
+    walkthroughCompletedStepIds.includes(step.id)
+  ).length;
+  const walkthroughComplete = walkthroughCompletedCount === walkthroughSteps.length;
+  const showWalkthroughPrompt = !walkthroughComplete && !dungeon.profile.walkthroughPromptDismissed;
   const checkedToday = useMemo(() => {
     const today = todayKey();
     return new Set(dungeon.habitLogs.filter((log) => log.date === today && log.checked).map((log) => log.habitId));
@@ -98,11 +106,50 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ uid }) => 
     }
   };
 
+  const dismissWalkthroughPrompt = async () => {
+    setBusy('walkthrough-dismiss');
+    try {
+      await actions.updateProfile({ walkthroughPromptDismissed: true });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {dungeon.error && (
         <Card className="border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
           <CardContent className="pt-6 text-sm">{dungeon.error.message}</CardContent>
+        </Card>
+      )}
+
+      {showWalkthroughPrompt && (
+        <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40">
+          <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-blue-950 dark:text-blue-100">Finish your walkthrough</p>
+              <p className="mt-1 text-sm text-blue-800 dark:text-blue-200">
+                {walkthroughCompletedCount} of {walkthroughSteps.length} onboarding steps are complete.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/walkthrough"
+                className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-600/90"
+              >
+                Open walkthrough
+              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={dismissWalkthroughPrompt}
+                disabled={busy === 'walkthrough-dismiss'}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </CardContent>
         </Card>
       )}
 
