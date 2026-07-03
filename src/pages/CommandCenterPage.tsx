@@ -1,6 +1,6 @@
 import React, { FormEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive, CheckCircle2, Flame, Plus, Send, Sparkles, Swords } from 'lucide-react';
+import { Archive, CheckCircle2, Flame, ListChecks, Plus, Send, Sparkles, Swords } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -10,7 +10,9 @@ import { Select, SelectItem } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useDungeonActions } from '@/weekly-dungeon/hooks/useDungeonActions';
 import { useDungeonData } from '@/weekly-dungeon/hooks/useDungeonData';
+import { usePracticeData } from '@/weekly-dungeon/hooks/usePracticeData';
 import { walkthroughSteps } from '@/pages/WalkthroughPage';
+import { getPracticeProgress, practiceDayThemes } from '@/weekly-dungeon/practice/model';
 import {
   buildCharacterPrompt,
   currentQuestDay,
@@ -34,6 +36,7 @@ function todayKey() {
 
 export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ uid }) => {
   const dungeon = useDungeonData(uid);
+  const practice = usePracticeData(uid);
   const actions = useDungeonActions(uid);
   const [questTitle, setQuestTitle] = useState('');
   const [questNote, setQuestNote] = useState('');
@@ -52,11 +55,15 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ uid }) => 
   ).length;
   const walkthroughComplete = walkthroughCompletedCount === walkthroughSteps.length;
   const showWalkthroughPrompt = !walkthroughComplete && !dungeon.profile.walkthroughPromptDismissed;
+  const walkthroughActiveStep =
+    walkthroughSteps.find((step) => !walkthroughCompletedStepIds.includes(step.id)) || walkthroughSteps[0];
   const checkedToday = useMemo(() => {
     const today = todayKey();
     return new Set(dungeon.habitLogs.filter((log) => log.date === today && log.checked).map((log) => log.habitId));
   }, [dungeon.habitLogs]);
   const guidePrompt = buildCharacterPrompt(dungeon.profile);
+  const practiceTheme = practice.position ? practiceDayThemes[practice.position.dayTheme] : null;
+  const practiceProgress = practice.todaySession ? getPracticeProgress(practice.todaySession.completedBlockIds) : null;
 
   const submitQuest = async (event: FormEvent) => {
     event.preventDefault();
@@ -125,19 +132,20 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ uid }) => 
 
       {showWalkthroughPrompt && (
         <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40">
-          <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+          <CardContent className="flex flex-col gap-4 pt-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
               <p className="font-semibold text-blue-950 dark:text-blue-100">Finish your walkthrough</p>
               <p className="mt-1 text-sm text-blue-800 dark:text-blue-200">
-                {walkthroughCompletedCount} of {walkthroughSteps.length} onboarding steps are complete.
+                {walkthroughCompletedCount} of {walkthroughSteps.length} steps complete. Continue with:{' '}
+                <span className="font-medium">{walkthroughActiveStep.title}</span>
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Link
                 to="/walkthrough"
                 className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-600/90"
               >
-                Open walkthrough
+                Continue
               </Link>
               <Button
                 type="button"
@@ -159,6 +167,30 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({ uid }) => 
         <Metric icon={CheckCircle2} label="Habits today" value={`${checkedToday.size}/${dungeon.habits.length}`} />
         <Metric icon={Archive} label="Memory contexts" value={String(dungeon.memoryContexts.length)} />
       </section>
+
+      <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30">
+        <CardContent className="flex flex-col gap-4 pt-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 gap-3">
+            <ListChecks className="mt-1 h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+            <div className="min-w-0">
+              <p className="font-semibold text-emerald-950 dark:text-emerald-100">
+                {practice.settings ? practiceTheme?.label || 'Practice system' : 'Start your practice system'}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-emerald-800 dark:text-emerald-200">
+                {practice.settings
+                  ? `${practiceProgress?.completedCount || 0} of ${practiceProgress?.totalCount || 4} daily blocks complete. ${practiceTheme?.summary || ''}`
+                  : 'Begin the 12-week training track for deliberate coding practice, evidence, and weekly reviews.'}
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/practice"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-emerald-700 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-800"
+          >
+            {practice.settings ? 'Continue practice' : 'Open practice'}
+          </Link>
+        </CardContent>
+      </Card>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>

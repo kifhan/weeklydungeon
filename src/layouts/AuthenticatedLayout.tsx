@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Header } from '@/components/Header';
-import { NavigatorPanel } from '@/components/NavigatorPanel';
+import { MobileNavigationCabinet, NavigatorPanel } from '@/components/NavigatorPanel';
 
 interface AuthenticatedLayoutProps {
   authedUser: FirebaseUser;
@@ -11,14 +11,41 @@ interface AuthenticatedLayoutProps {
 }
 
 export const AuthenticatedLayout: React.FC<AuthenticatedLayoutProps> = ({ authedUser, onLogOut, authError }) => {
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 font-sans text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-      <div className="mx-auto max-w-7xl">
-        <Header user={authedUser} onLogOut={onLogOut} authError={authError} />
+  const [navigationOpen, setNavigationOpen] = useState(false);
 
-        <div className="flex gap-6 items-start">
+  useEffect(() => {
+    if (!navigationOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setNavigationOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [navigationOpen]);
+
+  return (
+    <div className="min-h-screen bg-gray-50 px-3 py-4 font-sans text-gray-900 dark:bg-gray-900 dark:text-gray-100 sm:px-5 lg:px-6">
+      <div className="mx-auto max-w-7xl">
+        <Header
+          user={authedUser}
+          onLogOut={onLogOut}
+          authError={authError}
+          onOpenNavigation={() => setNavigationOpen(true)}
+        />
+        <MobileNavigationCabinet open={navigationOpen} onClose={() => setNavigationOpen(false)} />
+
+        <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-6">
           <NavigatorPanel />
-          <main className="flex-1 min-w-0">
+          <main className="min-w-0">
             <Outlet />
           </main>
         </div>

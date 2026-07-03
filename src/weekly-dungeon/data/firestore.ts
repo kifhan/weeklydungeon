@@ -31,6 +31,11 @@ import {
   type ReflectionAnswer,
   type ReflectionDelivery,
 } from '../domain/types';
+import {
+  type PracticeReview,
+  type PracticeSession,
+  type PracticeSettings,
+} from '../practice/model';
 
 type Listener<T> = (items: T[]) => void;
 type ListenerError = (error: Error) => void;
@@ -88,6 +93,11 @@ export const dungeonPaths = {
   memoryContexts: (uid: string) => collection(db, 'users', uid, 'memoryContexts'),
   notificationTokens: (uid: string) => collection(db, 'users', uid, 'notificationTokens'),
   profile: (uid: string) => doc(db, 'users', uid, 'settings', 'profile'),
+  practiceSettings: (uid: string) => doc(db, 'users', uid, 'settings', 'practice'),
+  practiceSessions: (uid: string) => collection(db, 'users', uid, 'practiceSessions'),
+  practiceSession: (uid: string, sessionId: string) => doc(db, 'users', uid, 'practiceSessions', sessionId),
+  practiceReviews: (uid: string) => collection(db, 'users', uid, 'practiceReviews'),
+  practiceReview: (uid: string, reviewId: string) => doc(db, 'users', uid, 'practiceReviews', reviewId),
   migration: (uid: string) => doc(db, 'users', uid, 'settings', 'migration'),
 };
 
@@ -155,6 +165,44 @@ export function listenDungeonProfile(
   return onSnapshot(
     dungeonPaths.profile(uid),
     (snapshot) => onData(snapshot.exists() ? { ...defaultDungeonProfile, ...snapshot.data() } : defaultDungeonProfile),
+    onError
+  );
+}
+
+export function listenPracticeSettings(
+  uid: string,
+  onData: (settings: PracticeSettings | null) => void,
+  onError?: ListenerError
+): Unsubscribe {
+  return onSnapshot(
+    dungeonPaths.practiceSettings(uid),
+    (snapshot) => onData(snapshot.exists() ? (snapshot.data() as PracticeSettings) : null),
+    onError
+  );
+}
+
+export function listenPracticeSession(
+  uid: string,
+  sessionId: string,
+  onData: (session: PracticeSession | null) => void,
+  onError?: ListenerError
+): Unsubscribe {
+  return onSnapshot(
+    dungeonPaths.practiceSession(uid, sessionId),
+    (snapshot) => onData(snapshot.exists() ? (snapshot.data() as PracticeSession) : null),
+    onError
+  );
+}
+
+export function listenPracticeReview(
+  uid: string,
+  reviewId: string,
+  onData: (review: PracticeReview | null) => void,
+  onError?: ListenerError
+): Unsubscribe {
+  return onSnapshot(
+    dungeonPaths.practiceReview(uid, reviewId),
+    (snapshot) => onData(snapshot.exists() ? (snapshot.data() as PracticeReview) : null),
     onError
   );
 }
@@ -320,6 +368,39 @@ export async function saveDungeonProfile(uid: string, profile: Partial<DungeonPr
     dungeonPaths.profile(uid),
     {
       ...profile,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function savePracticeSettings(uid: string, settings: PracticeSettings) {
+  await setDoc(
+    dungeonPaths.practiceSettings(uid),
+    {
+      ...settings,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function savePracticeSession(uid: string, session: PracticeSession) {
+  await setDoc(
+    dungeonPaths.practiceSession(uid, session.id),
+    {
+      ...session,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function savePracticeReview(uid: string, review: PracticeReview) {
+  await setDoc(
+    dungeonPaths.practiceReview(uid, review.id),
+    {
+      ...review,
       updatedAt: serverTimestamp(),
     },
     { merge: true }

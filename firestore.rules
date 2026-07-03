@@ -136,7 +136,9 @@ service cloud.firestore {
       return hasOnlyFields([
           'timezone', 'notificationChannel', 'remindersEnabled',
           'guideName', 'guideArchetype', 'guideTraits', 'guideTone',
-          'guidePrompt', 'adventureIntensity', 'updatedAt'
+          'guidePrompt', 'adventureIntensity',
+          'walkthroughCompletedStepIds', 'walkthroughPromptDismissed',
+          'updatedAt'
         ]) &&
         isOptionalStringField('timezone', 80) &&
         isOptionalEnumField('notificationChannel', ['in-app', 'push', 'email']) &&
@@ -147,6 +149,61 @@ service cloud.firestore {
         isOptionalStringField('guideTone', 500) &&
         isOptionalStringField('guidePrompt', 4000) &&
         isOptionalNumberField('adventureIntensity', 0, 100) &&
+        isOptionalStringListField('walkthroughCompletedStepIds', 20) &&
+        isOptionalBoolField('walkthroughPromptDismissed') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validPracticeSettings() {
+      return hasOnlyFields(['activeProgramId', 'startDate', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['activeProgramId', 'startDate']) &&
+        request.resource.data.activeProgramId == 'michelin-coding-12-week' &&
+        isStringField('startDate', 20) &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validPracticeSession() {
+      return hasOnlyFields([
+          'id', 'programId', 'date', 'weekNumber', 'dayTheme', 'completedBlockIds',
+          'notes', 'evidenceLinks', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        hasRequiredFields(['id', 'programId', 'date', 'weekNumber', 'dayTheme', 'completedBlockIds', 'status']) &&
+        isStringField('id', 180) &&
+        request.resource.data.programId == 'michelin-coding-12-week' &&
+        isStringField('date', 20) &&
+        request.resource.data.weekNumber is number &&
+        request.resource.data.weekNumber >= 1 &&
+        request.resource.data.weekNumber <= 12 &&
+        request.resource.data.dayTheme in [
+          'code-reading', 'domain-logic', 'ui-states', 'integration', 'review', 'rebuild', 'taste-journal'
+        ] &&
+        isOptionalStringListField('completedBlockIds', 4) &&
+        isOptionalStringField('notes', 10000) &&
+        isOptionalStringListField('evidenceLinks', 12) &&
+        request.resource.data.status in ['not-started', 'in-progress', 'complete'] &&
+        isOptionalTimestampField('createdAt') &&
+        isOptionalTimestampField('updatedAt');
+    }
+
+    function validPracticeReview() {
+      return hasOnlyFields([
+          'id', 'programId', 'weekNumber', 'uglyCode', 'whyUgly', 'pattern',
+          'preventionRule', 'nextWeekFocus', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        hasRequiredFields(['id', 'programId', 'weekNumber', 'status']) &&
+        isStringField('id', 180) &&
+        request.resource.data.programId == 'michelin-coding-12-week' &&
+        request.resource.data.weekNumber is number &&
+        request.resource.data.weekNumber >= 1 &&
+        request.resource.data.weekNumber <= 12 &&
+        isOptionalStringField('uglyCode', 4000) &&
+        isOptionalStringField('whyUgly', 4000) &&
+        isOptionalStringField('pattern', 4000) &&
+        isOptionalStringField('preventionRule', 4000) &&
+        isOptionalStringField('nextWeekFocus', 4000) &&
+        request.resource.data.status in ['not-started', 'in-progress', 'complete'] &&
+        isOptionalTimestampField('createdAt') &&
         isOptionalTimestampField('updatedAt');
     }
 
@@ -216,6 +273,18 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /practiceSessions/{sessionId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validPracticeSession();
+        allow delete: if false;
+      }
+
+      match /practiceReviews/{reviewId} {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validPracticeReview();
+        allow delete: if false;
+      }
+
       // Weeks
       match /weeks/{weekKey} {
         allow read: if isAuthed(uid);
@@ -270,6 +339,12 @@ service cloud.firestore {
       match /settings/profile {
         allow read: if isAuthed(uid);
         allow create, update: if isAuthed(uid) && validProfile();
+        allow delete: if false;
+      }
+
+      match /settings/practice {
+        allow read: if isAuthed(uid);
+        allow create, update: if isAuthed(uid) && validPracticeSettings();
         allow delete: if false;
       }
 
