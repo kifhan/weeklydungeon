@@ -13,6 +13,7 @@ import { LifePage } from '@/pages/LifePage';
 import { ReflectionAnswerPage } from '@/pages/ReflectionAnswerPage';
 import { WalkthroughPage } from '@/pages/WalkthroughPage';
 import { PracticePage } from '@/pages/PracticePage';
+import { HistoryPage } from '@/pages/HistoryPage';
 
 interface AppRoutesProps {
   user: FirebaseUser | null | undefined;
@@ -68,6 +69,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         <Route path="settings" element={uid ? <SettingsPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="walkthrough" element={uid ? <WalkthroughPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="practice" element={uid ? <PracticePage uid={uid} /> : <Navigate to="/login" replace />} />
+        <Route path="history" element={uid ? <HistoryPage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="reflections" element={uid ? <LifePage uid={uid} /> : <Navigate to="/login" replace />} />
         <Route path="life" element={<Navigate to="/reflections" replace />} />
         <Route

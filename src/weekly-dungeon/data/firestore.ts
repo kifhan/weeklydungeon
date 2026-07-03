@@ -115,6 +115,11 @@ export function listenCurrentWeekQuests(
   return onSnapshot(q, (snapshot) => onData(sortQuests(snapshot.docs.map(readDoc<Quest>))), onError);
 }
 
+export function listenQuestHistory(uid: string, onData: Listener<Quest>, onError?: ListenerError): Unsubscribe {
+  const q = query(dungeonPaths.quests(uid), orderBy('completedAt', 'desc'), limit(100));
+  return onSnapshot(q, (snapshot) => onData(snapshot.docs.map(readDoc<Quest>)), onError);
+}
+
 export function listenHabits(uid: string, onData: Listener<Habit>, onError?: ListenerError): Unsubscribe {
   const q = query(dungeonPaths.habits(uid), orderBy('createdAt', 'asc'), limit(200));
   return onSnapshot(q, (snapshot) => onData(snapshot.docs.map(readDoc<Habit>)), onError);
@@ -205,6 +210,24 @@ export function listenPracticeReview(
     (snapshot) => onData(snapshot.exists() ? (snapshot.data() as PracticeReview) : null),
     onError
   );
+}
+
+export function listenPracticeSessions(
+  uid: string,
+  onData: Listener<PracticeSession>,
+  onError?: ListenerError
+): Unsubscribe {
+  const q = query(dungeonPaths.practiceSessions(uid), orderBy('updatedAt', 'desc'), limit(100));
+  return onSnapshot(q, (snapshot) => onData(snapshot.docs.map(readDoc<PracticeSession>)), onError);
+}
+
+export function listenPracticeReviews(
+  uid: string,
+  onData: Listener<PracticeReview>,
+  onError?: ListenerError
+): Unsubscribe {
+  const q = query(dungeonPaths.practiceReviews(uid), orderBy('updatedAt', 'desc'), limit(50));
+  return onSnapshot(q, (snapshot) => onData(snapshot.docs.map(readDoc<PracticeReview>)), onError);
 }
 
 export async function createQuest(
