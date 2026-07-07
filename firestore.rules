@@ -132,14 +132,18 @@ service cloud.firestore {
         isOptionalTimestampField('updatedAt');
     }
 
-    function validProfile() {
-      return hasOnlyFields([
+    function profileFields() {
+      return [
           'timezone', 'notificationChannel', 'remindersEnabled',
           'guideName', 'guideArchetype', 'guideTraits', 'guideTone',
           'guidePrompt', 'adventureIntensity',
           'walkthroughCompletedStepIds', 'walkthroughPromptDismissed',
           'updatedAt'
-        ]) &&
+        ];
+    }
+
+    function validProfileValues() {
+      return
         isOptionalStringField('timezone', 80) &&
         isOptionalEnumField('notificationChannel', ['in-app', 'push', 'email']) &&
         isOptionalBoolField('remindersEnabled') &&
@@ -152,6 +156,30 @@ service cloud.firestore {
         isOptionalStringListField('walkthroughCompletedStepIds', 20) &&
         isOptionalBoolField('walkthroughPromptDismissed') &&
         isOptionalTimestampField('updatedAt');
+    }
+
+    function validProfile() {
+      return hasOnlyFields(profileFields()) && validProfileValues();
+    }
+
+    function profileFieldChanged(name) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([name]);
+    }
+
+    function validProfileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(profileFields()) &&
+        (!profileFieldChanged('timezone') || isOptionalStringField('timezone', 80)) &&
+        (!profileFieldChanged('notificationChannel') || isOptionalEnumField('notificationChannel', ['in-app', 'push', 'email'])) &&
+        (!profileFieldChanged('remindersEnabled') || isOptionalBoolField('remindersEnabled')) &&
+        (!profileFieldChanged('guideName') || isOptionalStringField('guideName', 120)) &&
+        (!profileFieldChanged('guideArchetype') || isOptionalEnumField('guideArchetype', ['Guide', 'Strategist', 'Scout', 'Guardian'])) &&
+        (!profileFieldChanged('guideTraits') || isOptionalStringListField('guideTraits', 8)) &&
+        (!profileFieldChanged('guideTone') || isOptionalStringField('guideTone', 500)) &&
+        (!profileFieldChanged('guidePrompt') || isOptionalStringField('guidePrompt', 4000)) &&
+        (!profileFieldChanged('adventureIntensity') || isOptionalNumberField('adventureIntensity', 0, 100)) &&
+        (!profileFieldChanged('walkthroughCompletedStepIds') || isOptionalStringListField('walkthroughCompletedStepIds', 20)) &&
+        (!profileFieldChanged('walkthroughPromptDismissed') || isOptionalBoolField('walkthroughPromptDismissed')) &&
+        (!profileFieldChanged('updatedAt') || isOptionalTimestampField('updatedAt'));
     }
 
     function validPracticeSettings() {
@@ -338,7 +366,8 @@ service cloud.firestore {
       // Settings (Character Profile)
       match /settings/profile {
         allow read: if isAuthed(uid);
-        allow create, update: if isAuthed(uid) && validProfile();
+        allow create: if isAuthed(uid) && validProfile();
+        allow update: if isAuthed(uid) && validProfileUpdate();
         allow delete: if false;
       }
 
